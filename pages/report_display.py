@@ -16,6 +16,37 @@ def display_report_results():
     create_navigation()
     st.title("Your Personalized Home Recommendations")
     
+    # Add narrative summary
+    st.markdown("### Summary of Recommendations")
+    
+    # Get key metrics for the narrative
+    max_home_price = st.session_state.report_data['max_home_price']
+    monthly_mortgage = st.session_state.financial_info.get('target_home_price', 0) * 0.8 * 0.005
+    current_rent = st.session_state.financial_info.get('current_monthly_rent', 0)
+    recommendation = st.session_state.report_data['rent_vs_buy_recommendation'].upper()
+    
+    # Create narrative
+    st.markdown(f'''
+    Based on your financial profile and preferences, here are our key recommendations:
+    
+    - **Housing Budget**: You can afford a home up to ${max_home_price:,.2f}, based on your income, savings, and current expenses.
+    
+    - **Buy vs Rent**: We recommend you **{recommendation}** because:
+        - Monthly mortgage payment would be approximately ${monthly_mortgage:,.2f}
+        - Your current monthly rent is ${current_rent:,.2f}
+        - {'The cost of buying (including maintenance and taxes) would be higher than renting.' if recommendation == 'RENT' else 'Buying would build equity while keeping monthly costs manageable.'}
+    
+    - **Neighborhood Matches**: We've identified neighborhoods that match your lifestyle preferences, prioritizing:
+        - School quality for your family
+        - Safety ratings
+        - Your preferred transportation options
+        - Local amenities that match your interests
+    
+    Below you'll find detailed analysis of costs, neighborhood trends, and specific recommendations.
+    ''')
+    
+    st.divider()  # Add visual separator before detailed sections
+    
     # Financial Analysis Section
     st.header("💰 Financial Analysis")
     col1, col2 = st.columns(2)
