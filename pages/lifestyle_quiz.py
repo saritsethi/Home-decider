@@ -17,6 +17,8 @@ def initialize_session_state():
         st.session_state.family_info = {}
     if 'financial_info' not in st.session_state:
         st.session_state.financial_info = {}
+    if 'selected_state' not in st.session_state:
+        st.session_state.selected_state = None
 
 def display_family_info():
     with st.form("family_info_form"):
@@ -69,8 +71,19 @@ def display_financial_info():
 def display_lifestyle_preferences():
     with st.form("neighborhood_preferences_form"):
         st.subheader("Location Preferences")
-        state = st.selectbox("Select State", get_available_states())
-        city = st.selectbox("Select City", get_available_cities(state))
+        
+        # Add session state for state selection
+        state = st.selectbox("Select State", get_available_states(), key='state_selector')
+        # Update selected state when changed
+        if st.session_state.selected_state != state:
+            st.session_state.selected_state = state
+            # Reset city when state changes
+            if 'city' in st.session_state:
+                del st.session_state.city
+        
+        # Get cities for selected state only
+        cities = get_available_cities(state)
+        city = st.selectbox("Select City", cities, key='city_selector')
         
         st.subheader("Neighborhood Preferences")
         housing_type = st.select_slider(
@@ -91,6 +104,12 @@ def display_lifestyle_preferences():
             quiet = st.slider("How important is a quiet neighborhood?", 0, 10, 5)
         
         if st.form_submit_button("Generate Report"):
+            # Combine all info before generating report
+            combined_info = {
+                **st.session_state.family_info,
+                **st.session_state.financial_info  # This includes annual_income
+            }
+            
             preferences = {
                 "state": state,
                 "city": city,
@@ -105,13 +124,13 @@ def display_lifestyle_preferences():
             # Save preferences to session state
             st.session_state.preferences = preferences
             
-            # Generate report and save to session state
+            # Get neighborhood matches
             matches = get_neighborhood_data(city=city, state=state)
             
-            # Generate and store report data
+            # Generate and store report data with combined info
             st.session_state.report_data = generate_integrated_report(
                 preferences,
-                st.session_state.family_info,
+                combined_info,  # Pass combined info instead of just family_info
                 matches
             )
             
@@ -119,10 +138,10 @@ def display_lifestyle_preferences():
             save_quiz_results(
                 st.session_state.session_id,
                 json.dumps(preferences),
-                json.dumps({**st.session_state.family_info, **st.session_state.financial_info})
+                json.dumps(combined_info)
             )
             
-            # Switch to report page using st.switch_page
+            # Switch to report page
             st.switch_page("pages/report_display.py")
 
 def display_current_step():
