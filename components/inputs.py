@@ -1,4 +1,5 @@
 import streamlit as st
+from utils.database import get_available_cities, get_neighborhood_data
 
 def create_financial_inputs():
     """Create standardized financial input fields."""
@@ -32,10 +33,16 @@ def create_financial_inputs():
 
 def create_neighborhood_inputs():
     """Create standardized neighborhood comparison inputs."""
-    city = st.selectbox("Select City", ["New York", "San Francisco", "Chicago", "Austin"])
+    cities = get_available_cities()
+    city = st.selectbox("Select City", cities)
+    
+    # Get neighborhoods for selected city
+    neighborhoods_data = get_neighborhood_data(city)
+    available_neighborhoods = [n['name'] for n in neighborhoods_data] if neighborhoods_data else ["No neighborhoods available"]
+    
     neighborhoods = st.multiselect(
         "Select Neighborhoods to Compare",
-        ["Downtown", "Suburbs", "Midtown", "Uptown"],
+        available_neighborhoods,
         max_selections=3
     )
     return city, neighborhoods

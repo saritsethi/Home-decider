@@ -9,6 +9,13 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+def create_feature_container(title, description, page_path):
+    """Create a styled container for feature links."""
+    with st.container():
+        st.subheader(title)
+        st.write(description)
+        st.page_link(page_path, label=f"Go to {title}", use_container_width=True)
+
 def main():
     # Initialize database
     init_database()
@@ -26,28 +33,28 @@ def main():
     * Get personalized lifestyle-based recommendations
     """)
     
-    # Quick access cards
+    # Quick access cards using containers
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        st.card(
-            title="Rent vs. Buy Calculator",
-            text="Compare the financial implications of renting versus buying",
-            on_click=lambda: st.switch_page("pages/rent_vs_buy.py")
+        create_feature_container(
+            "Rent vs. Buy Calculator",
+            "Compare the financial implications of renting versus buying",
+            "pages/rent_vs_buy.py"
         )
     
     with col2:
-        st.card(
-            title="Neighborhood Comparison",
-            text="Analyze and compare different neighborhoods",
-            on_click=lambda: st.switch_page("pages/neighborhood_comparison.py")
+        create_feature_container(
+            "Neighborhood Comparison",
+            "Analyze and compare different neighborhoods",
+            "pages/neighborhood_comparison.py"
         )
     
     with col3:
-        st.card(
-            title="Lifestyle Quiz",
-            text="Get personalized neighborhood recommendations",
-            on_click=lambda: st.switch_page("pages/lifestyle_quiz.py")
+        create_feature_container(
+            "Lifestyle Quiz",
+            "Get personalized neighborhood recommendations",
+            "pages/lifestyle_quiz.py"
         )
 
 if __name__ == "__main__":
