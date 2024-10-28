@@ -3,6 +3,7 @@ import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 import json
 from datetime import datetime, timedelta
+import random
 
 def get_db_connection():
     """Create a database connection using environment variables."""
@@ -13,6 +14,23 @@ def get_db_connection():
         port=os.environ['PGPORT'],
         database=os.environ['PGDATABASE']
     )
+
+def generate_historical_values(base_price):
+    values = []
+    date = datetime.now() - timedelta(days=5*365)
+    price = base_price * 0.75  # Start 25% lower than current
+    
+    for _ in range(20):  # Quarterly for 5 years
+        values.append({
+            "date": date.strftime("%Y-%m-%d"),
+            "value": round(price, 2)
+        })
+        date += timedelta(days=90)
+        # Add some variability to price growth
+        growth_rate = 1.02 + (random.random() - 0.5) * 0.01
+        price *= growth_rate
+    
+    return json.dumps(values)
 
 def init_database():
     """Initialize database tables if they don't exist."""
@@ -64,35 +82,11 @@ def init_database():
     count = cur.fetchone()[0]
     
     if count == 0:
-        # Generate sample historical data (last 5 years, quarterly)
-        def generate_historical_values(base_price):
-            values = []
-            date = datetime.now() - timedelta(days=5*365)  # Start 5 years ago
-            price = base_price * 0.8  # Start 20% lower than current
-            
-            for _ in range(20):  # Quarterly for 5 years
-                values.append({
-                    "date": date.strftime("%Y-%m-%d"),
-                    "value": round(price, 2)
-                })
-                date += timedelta(days=90)  # Add one quarter
-                price *= 1.01  # 1% quarterly growth
-            
-            return json.dumps(values)
-        
         sample_data = [
-            ('CA', 'San Francisco', 'Mission District', 8.5, 7.0, 9.0, 9.5, generate_historical_values(1200000)),
-            ('CA', 'San Francisco', 'Pacific Heights', 9.5, 8.5, 7.5, 8.0, generate_historical_values(2500000)),
-            ('CA', 'Los Angeles', 'Santa Monica', 9.0, 8.0, 8.0, 9.0, generate_historical_values(1500000)),
-            ('CA', 'Los Angeles', 'Silver Lake', 8.0, 7.5, 7.5, 8.5, generate_historical_values(1100000)),
-            ('NY', 'New York', 'Brooklyn Heights', 8.0, 8.5, 9.0, 9.0, generate_historical_values(1800000)),
-            ('NY', 'New York', 'Upper West Side', 9.0, 9.0, 9.5, 9.0, generate_historical_values(2200000)),
-            ('IL', 'Chicago', 'Lincoln Park', 7.5, 8.0, 8.5, 8.5, generate_historical_values(900000)),
-            ('IL', 'Chicago', 'Wicker Park', 7.0, 7.5, 8.5, 9.0, generate_historical_values(800000)),
-            ('TX', 'Austin', 'South Congress', 6.5, 7.0, 7.0, 8.0, generate_historical_values(700000)),
-            ('TX', 'Austin', 'Domain', 7.0, 8.0, 6.5, 7.0, generate_historical_values(600000)),
-            ('TX', 'Dallas', 'Uptown', 7.5, 8.0, 7.0, 8.5, generate_historical_values(650000)),
-            ('TX', 'Dallas', 'Bishop Arts', 7.0, 7.5, 7.5, 8.0, generate_historical_values(550000))
+            ('IL', 'Chicago', 'Lincoln Park', 8.5, 9.0, 8.5, 9.0, generate_historical_values(800000)),
+            ('IL', 'Chicago', 'Wicker Park', 8.0, 8.5, 9.0, 9.0, generate_historical_values(650000)),
+            ('IL', 'Chicago', 'Lake View', 8.5, 8.5, 9.0, 8.5, generate_historical_values(700000)),
+            ('IL', 'Chicago', 'West Loop', 9.0, 8.0, 9.0, 9.5, generate_historical_values(900000))
         ]
         
         cur.executemany("""
