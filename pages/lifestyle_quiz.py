@@ -1,76 +1,12 @@
 import streamlit as st
 import json
 import uuid
+import os
 from components.navigation import create_navigation
 from utils.database import save_quiz_results, get_neighborhood_data
+from utils.report_generator import calculate_neighborhood_match, generate_integrated_report, create_pdf_report
 
 st.set_page_config(page_title="Lifestyle Quiz", page_icon="✨")
-
-def calculate_neighborhood_match(preferences):
-    """Calculate neighborhood matches based on user preferences."""
-    # Get all neighborhoods from database
-    neighborhoods = get_neighborhood_data()
-    
-    # Calculate match scores for each neighborhood
-    matched_neighborhoods = []
-    for hood in neighborhoods:
-        score = 0
-        reasons = []
-        
-        # Urban/Suburban preference
-        urban_score = {
-            "Very Urban": 1.0,
-            "Somewhat Urban": 0.75,
-            "Mixed": 0.5,
-            "Somewhat Suburban": 0.25,
-            "Very Suburban": 0.0
-        }
-        urban_factor = urban_score[preferences["housing_type"]]
-        density_match = 1 - abs(urban_factor - hood["walkability_score"]/10)
-        score += density_match * 25  # 25% weight
-        if density_match > 0.7:
-            reasons.append(f"Matches your {preferences['housing_type']} lifestyle preference")
-        
-        # Transport preference
-        transport_score = {
-            "Walking": hood["walkability_score"],
-            "Public Transit": hood["transport_score"],
-            "Mix": (hood["walkability_score"] + hood["transport_score"]) / 2,
-            "Personal Vehicle": 10 - hood["walkability_score"]  # Inverse of walkability for car preference
-        }
-        transport_match = transport_score[preferences["transport"]] / 10
-        score += transport_match * 25  # 25% weight
-        if transport_match > 0.7:
-            reasons.append(f"Great {preferences['transport'].lower()} options")
-        
-        # Nightlife/Shopping importance
-        lifestyle_score = (
-            (preferences["nightlife"] * hood["walkability_score"] +
-             preferences["shopping"] * hood["walkability_score"]) / 
-            (preferences["nightlife"] + preferences["shopping"] if (preferences["nightlife"] + preferences["shopping"]) > 0 else 1)
-        ) / 10
-        score += lifestyle_score * 25  # 25% weight
-        if lifestyle_score > 0.7:
-            reasons.append("Excellent nightlife and shopping access")
-        
-        # Outdoor/Quiet preference
-        quiet_score = (
-            (preferences["outdoor"] * (10 - hood["cost_of_living"]) +
-             preferences["quiet"] * (10 - hood["walkability_score"])) /
-            (preferences["outdoor"] + preferences["quiet"] if (preferences["outdoor"] + preferences["quiet"]) > 0 else 1)
-        ) / 10
-        score += quiet_score * 25  # 25% weight
-        if quiet_score > 0.7:
-            reasons.append("Great for outdoor activities and quiet living")
-        
-        matched_neighborhoods.append({
-            "neighborhood": hood,
-            "match_score": round(score, 1),
-            "reasons": reasons
-        })
-    
-    # Sort by match score
-    return sorted(matched_neighborhoods, key=lambda x: x["match_score"], reverse=True)
 
 def main():
     # Initialize session state
@@ -82,11 +18,23 @@ def main():
     st.title("Lifestyle Preference Quiz")
     st.write("""
     Take this quick quiz to get personalized neighborhood recommendations
-    based on your lifestyle preferences.
+    based on your lifestyle preferences and family needs.
     """)
     
-    # Quiz questions
+    # Quiz form
     with st.form("lifestyle_quiz"):
+        # Family Information Section
+        st.subheader("Family Information")
+        col1, col2 = st.columns(2)
+        with col1:
+            family_size = st.number_input("Number of family members", min_value=1, value=1)
+            adults = st.number_input("Number of adults", min_value=1, value=1)
+            children = st.number_input("Number of children", min_value=0, value=0)
+        with col2:
+            annual_income = st.number_input("Annual Household Income ($)", min_value=0, value=50000, step=1000)
+            savings = st.number_input("Total Savings ($)", min_value=0, value=10000, step=1000)
+            monthly_expenses = st.number_input("Monthly Expenses ($)", min_value=0, value=2000, step=100)
+        
         st.subheader("Housing Preferences")
         housing_type = st.select_slider(
             "Do you prefer urban or suburban living?",
@@ -112,7 +60,7 @@ def main():
         submitted = st.form_submit_button("Get Recommendations")
     
     if submitted:
-        # Save quiz results
+        # Prepare data
         preferences = {
             "housing_type": housing_type,
             "transport": transport,
@@ -122,20 +70,48 @@ def main():
             "quiet": quiet
         }
         
-        save_quiz_results(st.session_state.session_id, json.dumps(preferences))
+        family_info = {
+            "family_size": family_size,
+            "adults": adults,
+            "children": children,
+            "annual_income": annual_income,
+            "savings": savings,
+            "monthly_expenses": monthly_expenses
+        }
+        
+        # Save quiz results with family information
+        save_quiz_results(
+            st.session_state.session_id,
+            json.dumps(preferences),
+            json.dumps(family_info)
+        )
         
         # Get neighborhood matches
         matches = calculate_neighborhood_match(preferences)
         
-        st.success("🎯 Here are your personalized neighborhood matches!")
+        # Generate integrated report
+        report_data = generate_integrated_report(preferences, family_info, matches)
         
-        # Display top matches with detailed explanations
-        for i, match in enumerate(matches[:5]):  # Show top 5 matches
+        st.success("🎯 Here are your personalized recommendations!")
+        
+        # Financial Summary
+        st.subheader("Financial Analysis")
+        st.write(f"Based on your financial information:")
+        st.write(f"- Maximum affordable home price: ${report_data['max_home_price']:,.2f}")
+        st.write(f"- Recommendation: {report_data['rent_vs_buy_recommendation'].upper()}")
+        
+        # Display filtered and prioritized neighborhood matches
+        st.subheader("Recommended Neighborhoods")
+        for i, match in enumerate(report_data['recommended_neighborhoods']):
             hood = match["neighborhood"]
             with st.expander(f"#{i+1}: {hood['name']} - {match['match_score']}% Match", expanded=i==0):
-                st.write("### Why this neighborhood matches your preferences:")
+                st.write("### Why this neighborhood matches your needs:")
                 for reason in match["reasons"]:
                     st.write(f"- {reason}")
+                
+                # Additional family-specific information
+                if children > 0:
+                    st.write(f"- School Rating: {hood['school_rating']:.1f}/10 (Great for families with children!)")
                 
                 st.write("### Neighborhood Stats:")
                 col1, col2 = st.columns(2)
@@ -145,6 +121,25 @@ def main():
                 with col2:
                     st.metric("School Rating", f"{hood['school_rating']:.1f}/10")
                     st.metric("Walkability", f"{hood['walkability_score']:.1f}/10")
+        
+        # Generate and offer PDF download
+        if st.button("Generate Detailed PDF Report"):
+            # Create temporary file for PDF
+            pdf_path = f"temp_report_{st.session_state.session_id}.pdf"
+            create_pdf_report(pdf_path, report_data, family_info, preferences)
+            
+            # Read PDF file and create download button
+            with open(pdf_path, "rb") as pdf_file:
+                pdf_bytes = pdf_file.read()
+                st.download_button(
+                    label="Download PDF Report",
+                    data=pdf_bytes,
+                    file_name="home_decision_report.pdf",
+                    mime="application/pdf"
+                )
+            
+            # Clean up temporary file
+            os.remove(pdf_path)
 
 if __name__ == "__main__":
     main()

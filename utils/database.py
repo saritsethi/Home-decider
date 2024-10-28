@@ -18,15 +18,32 @@ def init_database():
     conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
     cur = conn.cursor()
     
-    # Backup existing data
-    cur.execute("SELECT * FROM neighborhoods") if table_exists(cur, 'neighborhoods') else None
-    existing_data = cur.fetchall() if table_exists(cur, 'neighborhoods') else []
+    # Create quiz_results table with family_info column
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS quiz_results (
+            id SERIAL PRIMARY KEY,
+            session_id TEXT NOT NULL,
+            preferences JSONB,
+            family_info JSONB,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
     
-    # Drop and recreate neighborhoods table with new schema
-    if table_exists(cur, 'neighborhoods'):
-        cur.execute("DROP TABLE neighborhoods")
+    # Add family_info column if it doesn't exist
+    cur.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT FROM information_schema.columns 
+                WHERE table_name = 'quiz_results' AND column_name = 'family_info'
+            ) THEN
+                ALTER TABLE quiz_results ADD COLUMN family_info JSONB;
+            END IF;
+        END $$;
+    """)
     
-    # Create neighborhoods table with state column
+    # Rest of the initialization code remains the same
+    # Create neighborhoods table
     cur.execute("""
         CREATE TABLE IF NOT EXISTS neighborhoods (
             id SERIAL PRIMARY KEY,
@@ -40,17 +57,7 @@ def init_database():
         )
     """)
     
-    # Create quiz_results table
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS quiz_results (
-            id SERIAL PRIMARY KEY,
-            session_id TEXT NOT NULL,
-            preferences JSONB,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    
-    # Insert sample neighborhood data
+    # Insert sample neighborhood data if table is empty
     cur.execute("SELECT COUNT(*) FROM neighborhoods")
     count = cur.fetchone()[0]
     
@@ -79,24 +86,17 @@ def init_database():
     cur.close()
     conn.close()
 
-def table_exists(cur, table_name):
-    """Check if a table exists in the database."""
-    cur.execute("""
-        SELECT EXISTS (
-            SELECT FROM information_schema.tables 
-            WHERE table_name = %s
-        )
-    """, (table_name,))
-    return cur.fetchone()[0]
-
-def save_quiz_results(session_id, preferences):
+def save_quiz_results(session_id, preferences, family_info=None):
     """Save quiz results to database."""
     conn = get_db_connection()
     cur = conn.cursor()
     
     cur.execute(
-        "INSERT INTO quiz_results (session_id, preferences) VALUES (%s, %s)",
-        (session_id, preferences)
+        """
+        INSERT INTO quiz_results (session_id, preferences, family_info) 
+        VALUES (%s, %s, %s)
+        """,
+        (session_id, preferences, family_info)
     )
     
     conn.commit()
