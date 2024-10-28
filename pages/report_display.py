@@ -128,76 +128,14 @@ def display_report_results():
             else:
                 st.warning("Could not create neighborhood comparison visualization.")
         
-        # Create tabs for trends and analysis
+        # Display only historical value chart
         if neighborhoods:
-            trend_tabs = st.tabs(['Value Trends', 'Growth Rates', 'Market Analysis'])
-            
-            with trend_tabs[0]:
-                st.subheader('Historical Property Values')
-                fig = create_historical_value_chart(neighborhoods)
-                if fig:
-                    st.plotly_chart(fig, use_container_width=True)
-                else:
-                    st.warning('Historical property value data is not available.')
-            
-            with trend_tabs[1]:
-                st.subheader('Growth Rate Analysis')
-                growth_data = []
-                for hood in neighborhoods:
-                    try:
-                        historical_data = hood['historical_values'] if isinstance(hood['historical_values'], list) else json.loads(hood['historical_values'])
-                        if len(historical_data) >= 2:
-                            start_value = float(historical_data[0]['value'])
-                            end_value = float(historical_data[-1]['value'])
-                            growth_rate = ((end_value - start_value) / start_value) * 100
-                            annual_growth = ((1 + growth_rate/100) ** (1/5) - 1) * 100
-                            growth_data.append({
-                                'Neighborhood': hood['name'],
-                                'Total Growth Rate': growth_rate,
-                                'Annual Growth Rate': annual_growth,
-                                'Value Change': end_value - start_value
-                            })
-                    except (json.JSONDecodeError, KeyError, ValueError) as e:
-                        st.warning(f'Could not process growth data for {hood.get("name", "unknown")}')
-                        continue
-                
-                if growth_data:
-                    for data in growth_data:
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.metric(
-                                f"{data['Neighborhood']} - Total Growth",
-                                f"{data['Total Growth Rate']:.1f}%",
-                                delta=f"${data['Value Change']:,.2f}"
-                            )
-                        with col2:
-                            st.metric(
-                                "Annual Growth Rate",
-                                f"{data['Annual Growth Rate']:.1f}%"
-                            )
-                else:
-                    st.warning('No growth rate data available.')
-            
-            with trend_tabs[2]:
-                st.subheader('Market Analysis')
-                for hood in neighborhoods:
-                    with st.expander(f"{hood['name']} Market Analysis", expanded=True):
-                        try:
-                            historical_data = hood['historical_values'] if isinstance(hood['historical_values'], list) else json.loads(hood['historical_values'])
-                            if len(historical_data) >= 2:
-                                recent_value = float(historical_data[-1]['value'])
-                                start_value = float(historical_data[0]['value'])
-                                yearly_growth = (((recent_value / start_value) ** (1/5)) - 1) * 100
-                                
-                                col1, col2 = st.columns(2)
-                                with col1:
-                                    st.metric("Current Average Value", f"${recent_value:,.2f}")
-                                    st.metric("5-Year Start Value", f"${start_value:,.2f}")
-                                with col2:
-                                    st.metric("Annual Growth Rate", f"{yearly_growth:.1f}%")
-                                    st.metric("Cost of Living Score", f"{hood['cost_of_living']}/10")
-                        except (json.JSONDecodeError, KeyError, ValueError) as e:
-                            st.error(f'Could not analyze market data for {hood.get("name", "unknown")}')
+            st.subheader('Historical Property Values')
+            fig = create_historical_value_chart(neighborhoods)
+            if fig:
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.warning('Historical property value data is not available.')
     else:
         st.warning('Please complete the lifestyle quiz to see neighborhood analysis.')
     
@@ -217,28 +155,51 @@ def display_report_results():
     
     with col1:
         if st.button("💰 Calculate Mortgage"):
-            st.switch_page("pages/mortgage_calculator.py")
+            # Add mortgage calculator form directly in the report
+            st.subheader("Mortgage Pre-Qualification")
+            annual_income = st.number_input("Annual Income ($)", value=st.session_state.financial_info.get('annual_income', 60000))
+            monthly_debts = st.number_input("Monthly Debts ($)", value=500)
+            down_payment = st.number_input("Down Payment ($)", value=st.session_state.financial_info.get('down_payment', 20000))
+            interest_rate = st.number_input("Interest Rate (%)", value=6.5, step=0.1)
+            
+            if st.button("Calculate"):
+                # Calculate maximum mortgage amount
+                monthly_income = annual_income / 12
+                max_monthly_payment = (monthly_income * 0.43) - monthly_debts
+                monthly_rate = interest_rate / 12 / 100
+                n_payments = 30 * 12  # 30-year mortgage
+                
+                if monthly_rate > 0:
+                    max_mortgage = max_monthly_payment * (((1 + monthly_rate)**n_payments - 1) / (monthly_rate * (1 + monthly_rate)**n_payments))
+                else:
+                    max_mortgage = max_monthly_payment * n_payments
+                
+                max_home_price = max_mortgage + down_payment
+                
+                st.metric("Maximum Home Price", f"${max_home_price:,.2f}")
+                st.metric("Maximum Monthly Payment", f"${max_monthly_payment:,.2f}")
         st.caption("Get pre-qualified and calculate your monthly payments")
     
     with col2:
         if st.button("🏠 See Neighborhood Listings"):
-            # Display property listings for recommended neighborhoods
             st.header("Available Properties")
             for match in st.session_state.report_data['recommended_neighborhoods']:
                 hood = match['neighborhood']
-                if 'property_listings' in hood:
-                    listings = json.loads(hood['property_listings']) if isinstance(hood['property_listings'], str) else hood['property_listings']
-                    if listings:
-                        st.subheader(f"Properties in {hood['name']}")
-                        for listing in listings:
-                            with st.expander(f"${listing['price']:,} - {listing['bedrooms']}bd/{listing['bathrooms']}ba"):
-                                col1, col2 = st.columns(2)
-                                with col1:
-                                    st.metric("Square Feet", f"{listing['sqft']:,}")
-                                    st.metric("Year Built", listing['year_built'])
-                                with col2:
-                                    st.metric("Price/sqft", f"${listing['price']/listing['sqft']:,.2f}")
-                                st.write(listing['description'])
+                listings = hood.get('property_listings', [])
+                if isinstance(listings, str):
+                    listings = json.loads(listings)
+                
+                if listings:
+                    st.subheader(f"Properties in {hood['name']}")
+                    for listing in listings:
+                        with st.expander(f"${listing['price']:,} - {listing['bedrooms']}bd/{listing['bathrooms']}ba"):
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.metric("Square Feet", f"{listing['sqft']:,}")
+                                st.metric("Year Built", listing['year_built'])
+                            with col2:
+                                st.metric("Price/sqft", f"${listing['price']/listing['sqft']:,.2f}")
+                            st.write(listing['description'])
         st.caption("View available properties in your matched neighborhoods")
     
     with col3:
@@ -248,32 +209,55 @@ def display_report_results():
                 hood = match['neighborhood']
                 with st.expander(f"Daily Life in {hood['name']}", expanded=True):
                     st.subheader("🍳 Morning Routine")
-                    st.write("Breakfast Options:")
-                    st.write("- Local Cafe: 'Morning Brew' - Known for artisanal coffee and fresh pastries")
-                    st.write("- Family Diner: 'Sunrise Kitchen' - Popular weekend brunch spot")
+                    # Customize based on neighborhood location
+                    if 'Lincoln Park' in hood['name']:
+                        st.write("Breakfast Options:")
+                        st.write("- Cafe Vienna: European-style breakfast & pastries")
+                        st.write("- Sweet Maple Cafe: Local favorite for pancakes")
+                    elif 'Lake View' in hood['name']:
+                        st.write("Breakfast Options:")
+                        st.write("- Ann Sather: Famous for Swedish breakfast")
+                        st.write("- Southport Grocery: Fresh baked goods & coffee")
                     
                     st.subheader("🚶‍♂️ Family Activities")
-                    st.write("Walking Routes:")
-                    st.write("- Community Park Trail: Perfect for morning walks")
-                    st.write("- Riverside Path: Scenic route for evening strolls")
+                    if 'Lincoln Park' in hood['name']:
+                        st.write("- Lincoln Park Zoo: Free admission, open daily")
+                        st.write("- North Avenue Beach: Lake Michigan views")
+                    elif 'Lake View' in hood['name']:
+                        st.write("- Wrigley Field: Cubs games & tours")
+                        st.write("- Belmont Harbor: Dog beach & walking paths")
                     
                     st.subheader("🛒 Shopping & Errands")
-                    st.write("Grocery Options:")
-                    st.write("- Whole Foods Market: 10-minute walk")
-                    st.write("- Local Farmers Market: Weekend mornings")
+                    if 'Lincoln Park' in hood['name']:
+                        st.write("- Trader Joe's: 667 W Diversey Pkwy")
+                        st.write("- Green City Market: Seasonal farmers market")
+                    elif 'Lake View' in hood['name']:
+                        st.write("- Whole Foods: 3201 N Ashland Ave")
+                        st.write("- Jewel-Osco: 3531 N Broadway")
                     
                     st.subheader("🚇 Transportation")
-                    st.write("Public Transit:")
-                    st.write(f"- Nearest Bus Stop: {hood['name']} Central")
-                    st.write("- Metro Station: 5-minute walk to Green Line")
+                    if 'Lincoln Park' in hood['name']:
+                        st.write("- Red/Brown/Purple Line: Fullerton station")
+                        st.write("- Multiple bus routes on Clark & Lincoln")
+                    elif 'Lake View' in hood['name']:
+                        st.write("- Red/Brown/Purple Line: Belmont station")
+                        st.write("- Express buses to downtown on Lake Shore Dr")
                     
                     st.subheader("🌙 Date Night Ideas")
-                    st.write("Restaurant Recommendations:")
-                    st.write("- 'The Bistro' - Romantic Italian dining")
-                    st.write("- 'Sushi Star' - Popular fusion restaurant")
-                    st.write("Entertainment:")
-                    st.write("- Local Theater: Weekly shows and performances")
-                    st.write("- Wine Bar: 'Vintage Room' with live jazz")
+                    if 'Lincoln Park' in hood['name']:
+                        st.write("- Restaurants:")
+                        st.write("  • Cafe Ba-Ba-Reeba: Spanish tapas")
+                        st.write("  • North Pond: Fine dining in the park")
+                        st.write("- Entertainment:")
+                        st.write("  • Steppenwolf Theatre")
+                        st.write("  • Lincoln Hall: Live music venue")
+                    elif 'Lake View' in hood['name']:
+                        st.write("- Restaurants:")
+                        st.write("  • Southport Corridor restaurants")
+                        st.write("  • Music Box Theatre: Independent films")
+                        st.write("- Entertainment:")
+                        st.write("  • Metro: Historic concert venue")
+                        st.write("  • Comedy clubs on Broadway")
         st.caption("Experience a typical day in your potential new neighborhood")
 
     # Clean up the temporary PDF file
