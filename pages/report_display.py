@@ -151,9 +151,6 @@ def display_report_results():
                 st.metric("Walkability", f"{hood['walkability_score']}/10")
                 st.metric("Cost of Living", f"{hood['cost_of_living']}/10")
             
-            # Display property listings
-            display_property_listings(hood)
-            
             st.divider()
         
         # Create radar chart comparing neighborhoods
@@ -169,31 +166,129 @@ def display_report_results():
     else:
         st.warning('Please complete the lifestyle quiz to see neighborhood analysis.')
 
-    # What's Next Section
-    st.header("🎯 What's Next?")
+    # What's Next section
+    st.divider()
+    st.header("👉 What Would You Like to Do Next?")
     
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        st.markdown("""
-        ### 💰 Get Pre-Qualified
-        Ready to take the next step? Use our mortgage calculator to estimate your monthly payments and get pre-qualified.
-        """)
-        st.page_link("pages/mortgage_calculator.py", label="Calculate Mortgage", icon="💰")
+        if st.button("💰 Calculate Mortgage", use_container_width=True):
+            st.subheader("Mortgage Pre-Qualification")
+            annual_income = st.number_input("Annual Income ($)", min_value=0, value=st.session_state.financial_info.get('annual_income', 60000))
+            monthly_debts = st.number_input("Monthly Debts ($)", min_value=0, value=500)
+            down_payment = st.number_input("Down Payment ($)", min_value=0, value=st.session_state.financial_info.get('down_payment', 20000))
+            interest_rate = st.number_input("Interest Rate (%)", min_value=0.0, value=6.5, step=0.1)
+            
+            if st.button("Calculate", key="calc_mortgage"):
+                monthly_income = annual_income / 12
+                max_monthly_payment = (monthly_income * 0.43) - monthly_debts
+                monthly_rate = interest_rate / 12 / 100
+                n_payments = 30 * 12
+                
+                max_mortgage = max_monthly_payment * (((1 + monthly_rate)**n_payments - 1) / (monthly_rate * (1 + monthly_rate)**n_payments))
+                max_home_price = max_mortgage + down_payment
+                
+                st.metric("Maximum Home Price", f"${max_home_price:,.2f}")
+                st.metric("Maximum Monthly Payment", f"${max_monthly_payment:,.2f}")
     
     with col2:
-        st.markdown("""
-        ### 🔍 Compare More Areas
-        Want to explore other neighborhoods? Use our comparison tool to find the perfect match.
-        """)
-        st.page_link("pages/neighborhood_comparison.py", label="Compare Areas", icon="🏘️")
+        if st.button("🏠 View Properties", use_container_width=True):
+            st.subheader("Available Properties")
+            for match in st.session_state.report_data['recommended_neighborhoods']:
+                hood = match['neighborhood']
+                listings = hood.get('property_listings', [])
+                if isinstance(listings, str):
+                    listings = json.loads(listings)
+                
+                if listings:
+                    st.subheader(f"Properties in {hood['name']}")
+                    for listing in listings:
+                        with st.expander(f"${listing['price']:,} - {listing['bedrooms']}bd/{listing['bathrooms']}ba", expanded=True):
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.metric("Square Feet", f"{listing['sqft']:,}")
+                                st.metric("Year Built", listing['year_built'])
+                            with col2:
+                                st.metric("Price/sqft", f"${listing['price']/listing['sqft']:,.2f}")
+                            st.write(listing['description'])
+                else:
+                    st.info(f"No current listings available in {hood['name']}")
     
     with col3:
-        st.markdown("""
-        ### 📊 Rent vs Buy Analysis
-        Still deciding between renting and buying? Get a detailed cost comparison.
-        """)
-        st.page_link("pages/rent_vs_buy.py", label="Compare Costs", icon="🧮")
+        if st.button("🌟 Visualize Your Day", use_container_width=True):
+            st.header("A Day in Your New Neighborhood")
+            for match in st.session_state.report_data['recommended_neighborhoods']:
+                hood = match['neighborhood']
+                with st.expander(f"Daily Life in {hood['name']}", expanded=True):
+                    st.subheader("🍳 Morning Routine")
+                    st.write("Breakfast Options:")
+                    if 'Lincoln Park' in hood['name']:
+                        st.write("- Cafe Vienna: European-style breakfast & pastries")
+                        st.write("- Sweet Maple Cafe: Local favorite for pancakes")
+                    elif 'Lake View' in hood['name']:
+                        st.write("- Ann Sather: Famous for Swedish breakfast")
+                        st.write("- Southport Grocery: Fresh baked goods & coffee")
+                    else:
+                        st.write("- Local cafes and restaurants within walking distance")
+                        st.write("- Popular breakfast spots in the area")
+                    
+                    st.subheader("🚶‍♂️ Family Activities")
+                    if 'Lincoln Park' in hood['name']:
+                        st.write("- Lincoln Park Zoo: Free admission, open daily")
+                        st.write("- North Avenue Beach: Lake Michigan views")
+                    elif 'Lake View' in hood['name']:
+                        st.write("- Wrigley Field: Cubs games & tours")
+                        st.write("- Belmont Harbor: Dog beach & walking paths")
+                    else:
+                        st.write("- Community parks and recreational areas")
+                        st.write("- Local attractions and entertainment venues")
+                    
+                    st.subheader("🛒 Shopping & Errands")
+                    st.write("Grocery Options:")
+                    if 'Lincoln Park' in hood['name']:
+                        st.write("- Trader Joe's: 667 W Diversey Pkwy")
+                        st.write("- Green City Market: Seasonal farmers market")
+                    elif 'Lake View' in hood['name']:
+                        st.write("- Whole Foods: 3201 N Ashland Ave")
+                        st.write("- Jewel-Osco: 3531 N Broadway")
+                    else:
+                        st.write("- Local grocery stores and supermarkets")
+                        st.write("- Shopping centers and retail outlets")
+                    
+                    st.subheader("🚇 Transportation")
+                    if 'Lincoln Park' in hood['name']:
+                        st.write("- Red/Brown/Purple Line: Fullerton station")
+                        st.write("- Multiple bus routes on Clark & Lincoln")
+                    elif 'Lake View' in hood['name']:
+                        st.write("- Red/Brown/Purple Line: Belmont station")
+                        st.write("- Express buses to downtown on Lake Shore Dr")
+                    else:
+                        st.write("- Nearby public transit stations")
+                        st.write("- Major bus routes and transportation hubs")
+                    
+                    st.subheader("🌙 Date Night Ideas")
+                    if 'Lincoln Park' in hood['name']:
+                        st.write("Restaurants:")
+                        st.write("- Cafe Ba-Ba-Reeba: Spanish tapas")
+                        st.write("- North Pond: Fine dining in the park")
+                        st.write("Entertainment:")
+                        st.write("- Steppenwolf Theatre")
+                        st.write("- Lincoln Hall: Live music venue")
+                    elif 'Lake View' in hood['name']:
+                        st.write("Restaurants:")
+                        st.write("- Southport Corridor restaurants")
+                        st.write("- Music Box Theatre: Independent films")
+                        st.write("Entertainment:")
+                        st.write("- Metro: Historic concert venue")
+                        st.write("- Comedy clubs on Broadway")
+                    else:
+                        st.write("Restaurants:")
+                        st.write("- Local dining establishments")
+                        st.write("- Popular neighborhood eateries")
+                        st.write("Entertainment:")
+                        st.write("- Movie theaters and performance venues")
+                        st.write("- Local nightlife and entertainment options")
 
     # Add feedback section at the very end
     st.divider()
