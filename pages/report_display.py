@@ -59,21 +59,25 @@ def display_report_results():
             
             for match in st.session_state.report_data['recommended_neighborhoods']:
                 hood = match['neighborhood']
-                historical_data = hood['historical_values'] if isinstance(hood['historical_values'], list) else json.loads(hood['historical_values'])
-                if len(historical_data) >= 2:
-                    start_value = historical_data[0]['value']
-                    end_value = historical_data[-1]['value']
-                    total_growth = ((end_value - start_value) / start_value) * 100
-                    years = 5
-                    annual_growth = ((1 + total_growth/100) ** (1/years) - 1) * 100
-                    
-                    growth_data.append({
-                        'Neighborhood': hood['name'],
-                        'Annual Growth Rate': annual_growth,
-                        'Total Value Change': end_value - start_value,
-                        'Starting Value': start_value,
-                        'Current Value': end_value
-                    })
+                try:
+                    historical_data = hood['historical_values'] if isinstance(hood['historical_values'], list) else json.loads(hood['historical_values'])
+                    if len(historical_data) >= 2:
+                        start_value = historical_data[0]['value']
+                        end_value = historical_data[-1]['value']
+                        total_growth = ((end_value - start_value) / start_value) * 100
+                        years = 5
+                        annual_growth = ((1 + total_growth/100) ** (1/years) - 1) * 100
+                        
+                        growth_data.append({
+                            'Neighborhood': hood['name'],
+                            'Annual Growth Rate': annual_growth,
+                            'Total Value Change': end_value - start_value,
+                            'Starting Value': start_value,
+                            'Current Value': end_value
+                        })
+                except (json.JSONDecodeError, KeyError, TypeError) as e:
+                    st.warning(f"Could not process growth data for {hood['name']}")
+                    continue
             
             if growth_data:
                 for data in growth_data:
@@ -90,30 +94,33 @@ def display_report_results():
                             f"${data['Current Value']:,.2f}",
                             delta=f"From ${data['Starting Value']:,.2f}"
                         )
+            else:
+                st.warning("No growth data available for the selected neighborhoods.")
         
         with trend_tabs[2]:
-            # Market analysis
             st.subheader("Market Analysis")
             for match in st.session_state.report_data['recommended_neighborhoods']:
                 hood = match['neighborhood']
                 with st.expander(f"{hood['name']} Market Analysis", expanded=True):
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        historical_data = hood['historical_values'] if isinstance(hood['historical_values'], list) else json.loads(hood['historical_values'])
-                        if len(historical_data) >= 2:
-                            recent_value = historical_data[-1]['value']
-                            start_value = historical_data[0]['value']
-                            yearly_growth = (((recent_value / start_value) ** (1/5)) - 1) * 100
-                            
+                    # Parse historical data first
+                    historical_data = hood['historical_values'] if isinstance(hood['historical_values'], list) else json.loads(hood['historical_values'])
+                    if len(historical_data) >= 2:
+                        recent_value = historical_data[-1]['value']
+                        start_value = historical_data[0]['value']
+                        yearly_growth = (((recent_value / start_value) ** (1/5)) - 1) * 100
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
                             st.metric("Current Average Value", f"${recent_value:,.2f}")
                             st.metric("5-Year Start Value", f"${start_value:,.2f}")
                             st.metric("Annual Growth Rate", f"{yearly_growth:.1f}%")
-                    
-                    with col2:
-                        st.metric("Cost of Living Score", f"{hood['cost_of_living']}/10")
-                        st.metric("Price per Walkability Point", f"${(recent_value / hood['walkability_score']):,.2f}")
-                        st.metric("Price per School Rating Point", f"${(recent_value / hood['school_rating']):,.2f}")
+                        
+                        with col2:
+                            st.metric("Cost of Living Score", f"{hood['cost_of_living']}/10")
+                            st.metric("Price per Walkability Point", f"${(recent_value / hood['walkability_score']):,.2f}")
+                            st.metric("Price per School Rating Point", f"${(recent_value / hood['school_rating']):,.2f}")
+                    else:
+                        st.warning(f"No historical data available for {hood['name']}")
     
     # Neighborhood Recommendations
     st.header("🏘️ Recommended Neighborhoods")
