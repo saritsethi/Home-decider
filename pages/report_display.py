@@ -96,18 +96,32 @@ def display_report_results():
     # Neighborhood Analysis
     st.header('🏘️ Neighborhood Analysis')
     if st.session_state.report_data.get('recommended_neighborhoods'):
-        # Create a list of neighborhoods from recommendations
-        neighborhoods = []
+        # Display each recommended neighborhood
         for match in st.session_state.report_data['recommended_neighborhoods']:
-            if isinstance(match, dict) and 'neighborhood' in match:
-                neighborhoods.append(match['neighborhood'])
-
-        if neighborhoods:
-            # Create tabs for different views
+            hood = match['neighborhood']
+            st.subheader(f"{hood['name']} - {match['match_score']}% Match")
+            
+            # Display match reasons
+            st.markdown("#### Why this neighborhood?")
+            for reason in match['reasons']:
+                st.markdown(f"- {reason}")
+            
+            # Create columns for metrics
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("School Rating", f"{hood['school_rating']}/10")
+                st.metric("Transport Score", f"{hood['transport_score']}/10")
+            with col2:
+                st.metric("Walkability", f"{hood['walkability_score']}/10")
+                st.metric("Cost of Living", f"{hood['cost_of_living']}/10")
+            
+            st.divider()
+        
+        # Create tabs for trends and analysis
+        if neighborhoods := [match['neighborhood'] for match in st.session_state.report_data['recommended_neighborhoods']]:
             trend_tabs = st.tabs(['Value Trends', 'Growth Rates', 'Market Analysis'])
             
             with trend_tabs[0]:
-                # Value Trends tab
                 st.subheader('Historical Property Values')
                 fig = create_historical_value_chart(neighborhoods)
                 if fig:
@@ -116,7 +130,6 @@ def display_report_results():
                     st.warning('Historical property value data is not available.')
             
             with trend_tabs[1]:
-                # Growth Rates tab
                 st.subheader('Growth Rate Analysis')
                 growth_data = []
                 for hood in neighborhoods:
@@ -126,46 +139,54 @@ def display_report_results():
                             start_value = float(historical_data[0]['value'])
                             end_value = float(historical_data[-1]['value'])
                             growth_rate = ((end_value - start_value) / start_value) * 100
+                            annual_growth = ((1 + growth_rate/100) ** (1/5) - 1) * 100
                             growth_data.append({
                                 'Neighborhood': hood['name'],
-                                'Growth Rate': growth_rate
+                                'Total Growth Rate': growth_rate,
+                                'Annual Growth Rate': annual_growth,
+                                'Value Change': end_value - start_value
                             })
                     except (json.JSONDecodeError, KeyError, ValueError) as e:
                         st.warning(f'Could not process growth data for {hood.get("name", "unknown")}')
                         continue
                 
                 if growth_data:
-                    growth_df = pd.DataFrame(growth_data)
-                    fig = px.bar(growth_df, x='Neighborhood', y='Growth Rate',
-                                title='5-Year Growth Rates by Neighborhood',
-                                labels={'Growth Rate': 'Growth Rate (%)'})
-                    st.plotly_chart(fig, use_container_width=True)
+                    for data in growth_data:
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.metric(
+                                f"{data['Neighborhood']} - Total Growth",
+                                f"{data['Total Growth Rate']:.1f}%",
+                                delta=f"${data['Value Change']:,.2f}"
+                            )
+                        with col2:
+                            st.metric(
+                                "Annual Growth Rate",
+                                f"{data['Annual Growth Rate']:.1f}%"
+                            )
                 else:
                     st.warning('No growth rate data available.')
             
             with trend_tabs[2]:
-                # Market Analysis tab
-                st.subheader('Market Analysis by Neighborhood')
+                st.subheader('Market Analysis')
                 for hood in neighborhoods:
-                    with st.expander(f'{hood["name"]} Market Analysis', expanded=True):
+                    with st.expander(f"{hood['name']} Market Analysis", expanded=True):
                         try:
                             historical_data = hood['historical_values'] if isinstance(hood['historical_values'], list) else json.loads(hood['historical_values'])
                             if len(historical_data) >= 2:
+                                recent_value = float(historical_data[-1]['value'])
                                 start_value = float(historical_data[0]['value'])
-                                end_value = float(historical_data[-1]['value'])
-                                annual_growth = (((end_value / start_value) ** (1/5)) - 1) * 100
+                                yearly_growth = (((recent_value / start_value) ** (1/5)) - 1) * 100
                                 
                                 col1, col2 = st.columns(2)
                                 with col1:
-                                    st.metric('Current Average Value', f'${end_value:,.2f}')
-                                    st.metric('5-Year Price Change', f'${end_value - start_value:,.2f}')
+                                    st.metric("Current Average Value", f"${recent_value:,.2f}")
+                                    st.metric("5-Year Start Value", f"${start_value:,.2f}")
                                 with col2:
-                                    st.metric('Annual Growth Rate', f'{annual_growth:.1f}%')
-                                    st.metric('Cost of Living Score', f'{hood["cost_of_living"]}/10')
+                                    st.metric("Annual Growth Rate", f"{yearly_growth:.1f}%")
+                                    st.metric("Cost of Living Score", f"{hood['cost_of_living']}/10")
                         except (json.JSONDecodeError, KeyError, ValueError) as e:
                             st.error(f'Could not analyze market data for {hood.get("name", "unknown")}')
-        else:
-            st.warning('No neighborhood data available for analysis.')
     else:
         st.warning('Please complete the lifestyle quiz to see neighborhood analysis.')
 
