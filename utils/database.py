@@ -1,6 +1,8 @@
 import os
 import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
+import json
+from datetime import datetime, timedelta
 
 def get_db_connection():
     """Create a database connection using environment variables."""
@@ -29,21 +31,7 @@ def init_database():
         )
     """)
     
-    # Add family_info column if it doesn't exist
-    cur.execute("""
-        DO $$
-        BEGIN
-            IF NOT EXISTS (
-                SELECT FROM information_schema.columns 
-                WHERE table_name = 'quiz_results' AND column_name = 'family_info'
-            ) THEN
-                ALTER TABLE quiz_results ADD COLUMN family_info JSONB;
-            END IF;
-        END $$;
-    """)
-    
-    # Rest of the initialization code remains the same
-    # Create neighborhoods table
+    # Create neighborhoods table with historical data
     cur.execute("""
         CREATE TABLE IF NOT EXISTS neighborhoods (
             id SERIAL PRIMARY KEY,
@@ -53,34 +41,64 @@ def init_database():
             cost_of_living FLOAT,
             school_rating FLOAT,
             transport_score FLOAT,
-            walkability_score FLOAT
+            walkability_score FLOAT,
+            historical_values JSONB DEFAULT '[]'::jsonb
         )
     """)
     
-    # Insert sample neighborhood data if table is empty
+    # Add historical_values column if it doesn't exist
+    cur.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT FROM information_schema.columns 
+                WHERE table_name = 'neighborhoods' AND column_name = 'historical_values'
+            ) THEN
+                ALTER TABLE neighborhoods ADD COLUMN historical_values JSONB DEFAULT '[]'::jsonb;
+            END IF;
+        END $$;
+    """)
+    
+    # Insert sample data if table is empty
     cur.execute("SELECT COUNT(*) FROM neighborhoods")
     count = cur.fetchone()[0]
     
     if count == 0:
+        # Generate sample historical data (last 5 years, quarterly)
+        def generate_historical_values(base_price):
+            values = []
+            date = datetime.now() - timedelta(days=5*365)  # Start 5 years ago
+            price = base_price * 0.8  # Start 20% lower than current
+            
+            for _ in range(20):  # Quarterly for 5 years
+                values.append({
+                    "date": date.strftime("%Y-%m-%d"),
+                    "value": round(price, 2)
+                })
+                date += timedelta(days=90)  # Add one quarter
+                price *= 1.01  # 1% quarterly growth
+            
+            return json.dumps(values)
+        
         sample_data = [
-            ('CA', 'San Francisco', 'Mission District', 8.5, 7.0, 9.0, 9.5),
-            ('CA', 'San Francisco', 'Pacific Heights', 9.5, 8.5, 7.5, 8.0),
-            ('CA', 'Los Angeles', 'Santa Monica', 9.0, 8.0, 8.0, 9.0),
-            ('CA', 'Los Angeles', 'Silver Lake', 8.0, 7.5, 7.5, 8.5),
-            ('NY', 'New York', 'Brooklyn Heights', 8.0, 8.5, 9.0, 9.0),
-            ('NY', 'New York', 'Upper West Side', 9.0, 9.0, 9.5, 9.0),
-            ('IL', 'Chicago', 'Lincoln Park', 7.5, 8.0, 8.5, 8.5),
-            ('IL', 'Chicago', 'Wicker Park', 7.0, 7.5, 8.5, 9.0),
-            ('TX', 'Austin', 'South Congress', 6.5, 7.0, 7.0, 8.0),
-            ('TX', 'Austin', 'Domain', 7.0, 8.0, 6.5, 7.0),
-            ('TX', 'Dallas', 'Uptown', 7.5, 8.0, 7.0, 8.5),
-            ('TX', 'Dallas', 'Bishop Arts', 7.0, 7.5, 7.5, 8.0)
+            ('CA', 'San Francisco', 'Mission District', 8.5, 7.0, 9.0, 9.5, generate_historical_values(1200000)),
+            ('CA', 'San Francisco', 'Pacific Heights', 9.5, 8.5, 7.5, 8.0, generate_historical_values(2500000)),
+            ('CA', 'Los Angeles', 'Santa Monica', 9.0, 8.0, 8.0, 9.0, generate_historical_values(1500000)),
+            ('CA', 'Los Angeles', 'Silver Lake', 8.0, 7.5, 7.5, 8.5, generate_historical_values(1100000)),
+            ('NY', 'New York', 'Brooklyn Heights', 8.0, 8.5, 9.0, 9.0, generate_historical_values(1800000)),
+            ('NY', 'New York', 'Upper West Side', 9.0, 9.0, 9.5, 9.0, generate_historical_values(2200000)),
+            ('IL', 'Chicago', 'Lincoln Park', 7.5, 8.0, 8.5, 8.5, generate_historical_values(900000)),
+            ('IL', 'Chicago', 'Wicker Park', 7.0, 7.5, 8.5, 9.0, generate_historical_values(800000)),
+            ('TX', 'Austin', 'South Congress', 6.5, 7.0, 7.0, 8.0, generate_historical_values(700000)),
+            ('TX', 'Austin', 'Domain', 7.0, 8.0, 6.5, 7.0, generate_historical_values(600000)),
+            ('TX', 'Dallas', 'Uptown', 7.5, 8.0, 7.0, 8.5, generate_historical_values(650000)),
+            ('TX', 'Dallas', 'Bishop Arts', 7.0, 7.5, 7.5, 8.0, generate_historical_values(550000))
         ]
         
         cur.executemany("""
             INSERT INTO neighborhoods 
-            (state, city, name, cost_of_living, school_rating, transport_score, walkability_score)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            (state, city, name, cost_of_living, school_rating, transport_score, walkability_score, historical_values)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """, sample_data)
     
     cur.close()
@@ -139,15 +157,35 @@ def get_neighborhood_data(city=None, state=None):
     cur = conn.cursor()
     
     if state and city:
-        cur.execute("SELECT * FROM neighborhoods WHERE state = %s AND city = %s", (state, city))
+        cur.execute("""
+            SELECT id, state, city, name, cost_of_living, school_rating, 
+                   transport_score, walkability_score, historical_values
+            FROM neighborhoods 
+            WHERE state = %s AND city = %s
+        """, (state, city))
     elif state:
-        cur.execute("SELECT * FROM neighborhoods WHERE state = %s", (state,))
+        cur.execute("""
+            SELECT id, state, city, name, cost_of_living, school_rating, 
+                   transport_score, walkability_score, historical_values
+            FROM neighborhoods 
+            WHERE state = %s
+        """, (state,))
     elif city:
-        cur.execute("SELECT * FROM neighborhoods WHERE city = %s", (city,))
+        cur.execute("""
+            SELECT id, state, city, name, cost_of_living, school_rating, 
+                   transport_score, walkability_score, historical_values
+            FROM neighborhoods 
+            WHERE city = %s
+        """, (city,))
     else:
-        cur.execute("SELECT * FROM neighborhoods")
+        cur.execute("""
+            SELECT id, state, city, name, cost_of_living, school_rating, 
+                   transport_score, walkability_score, historical_values
+            FROM neighborhoods
+        """)
     
-    columns = ['id', 'state', 'city', 'name', 'cost_of_living', 'school_rating', 'transport_score', 'walkability_score']
+    columns = ['id', 'state', 'city', 'name', 'cost_of_living', 'school_rating', 
+               'transport_score', 'walkability_score', 'historical_values']
     results = [dict(zip(columns, row)) for row in cur.fetchall()]
     
     cur.close()

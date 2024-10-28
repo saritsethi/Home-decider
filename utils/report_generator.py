@@ -4,6 +4,8 @@ from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from utils.financial_calculations import calculate_rent_vs_buy
+import json
+from datetime import datetime
 
 def calculate_neighborhood_match(preferences):
     """Calculate neighborhood matches based on user preferences."""
@@ -33,10 +35,20 @@ def calculate_neighborhood_match(preferences):
             "Walking": hood['walkability_score'],
             "Public Transit": hood['transport_score'],
             "Mix": (hood['walkability_score'] + hood['transport_score']) / 2,
-            "Personal Vehicle": 10 - hood['transport_score']/2  # Less reliance on public transport
+            "Personal Vehicle": 10 - hood['transport_score']/2
         }
         transport_match = transport_scores[preferences['transport']]
         match_score += transport_match
+        
+        # Calculate historical value trend
+        historical_data = json.loads(hood['historical_values'])
+        if len(historical_data) >= 2:
+            start_value = historical_data[0]['value']
+            end_value = historical_data[-1]['value']
+            appreciation = ((end_value - start_value) / start_value) * 100
+            if appreciation > 15:  # More than 15% appreciation in 5 years
+                match_score += 10
+                reasons.append(f"Strong property value growth: {appreciation:.1f}% over 5 years")
         
         # Lifestyle matches
         if preferences['nightlife'] > 7:
@@ -52,19 +64,19 @@ def calculate_neighborhood_match(preferences):
                 reasons.append("Excellent shopping accessibility")
         
         if preferences['outdoor'] > 7:
-            outdoor_match = 10 - hood['cost_of_living']/2  # Assuming less dense areas have more outdoor spaces
+            outdoor_match = 10 - hood['cost_of_living']/2
             match_score += outdoor_match
             if outdoor_match > 7:
                 reasons.append("Good access to outdoor activities")
         
         if preferences['quiet'] > 7:
-            quiet_match = 10 - hood['walkability_score']/2  # Assuming less urban areas are quieter
+            quiet_match = 10 - hood['walkability_score']/2
             match_score += quiet_match
             if quiet_match > 7:
                 reasons.append("Quiet and peaceful environment")
         
         # Normalize score to percentage
-        final_score = int((match_score / 50) * 100)  # 50 is max possible score
+        final_score = int((match_score / 60) * 100)  # 60 is max possible score (including appreciation)
         
         # Add to matches if score is above 50%
         if final_score >= 50:
@@ -81,27 +93,15 @@ def calculate_neighborhood_match(preferences):
 
 def calculate_affordability(annual_income, savings, monthly_expenses):
     """Calculate maximum affordable home price based on financial situation."""
-    # Common rules of thumb:
-    # - Monthly housing payment should not exceed 28% of gross monthly income
-    # - Down payment should be at least 20% of home price
     monthly_income = annual_income / 12
     max_monthly_payment = monthly_income * 0.28
-    
-    # Subtract existing monthly expenses to get available payment amount
     available_monthly_payment = max_monthly_payment - monthly_expenses
-    
-    # Calculate max home price based on 30-year mortgage at 4.5% interest
-    max_price_from_income = (available_monthly_payment * 12 * 20)  # Rough estimate
-    
-    # Calculate max home price based on down payment (assuming 20% down)
-    max_price_from_savings = savings * 5  # Since savings represents 20%
-    
-    # Return the lower of the two limits
+    max_price_from_income = (available_monthly_payment * 12 * 20)
+    max_price_from_savings = savings * 5
     return min(max_price_from_income, max_price_from_savings)
 
 def generate_integrated_report(preferences, family_info, matched_neighborhoods):
     """Generate comprehensive report with recommendations."""
-    # Calculate affordability
     max_home_price = calculate_affordability(
         family_info['annual_income'],
         family_info['savings'],
@@ -114,8 +114,15 @@ def generate_integrated_report(preferences, family_info, matched_neighborhoods):
         if n['neighborhood']['cost_of_living'] * max_home_price / 10 <= max_home_price
     ]
     
-    # Adjust neighborhood scores based on family needs
+    # Adjust neighborhood scores based on family needs and historical performance
     for hood in affordable_neighborhoods:
+        historical_data = json.loads(hood['neighborhood']['historical_values'])
+        if len(historical_data) >= 2:
+            start_value = historical_data[0]['value']
+            end_value = historical_data[-1]['value']
+            appreciation = ((end_value - start_value) / start_value) * 100
+            hood['historical_appreciation'] = appreciation
+        
         # Increase importance of school ratings for families with children
         if family_info['children'] > 0:
             school_bonus = hood['neighborhood']['school_rating'] / 10 * 25
@@ -132,9 +139,9 @@ def generate_integrated_report(preferences, family_info, matched_neighborhoods):
     financial_analysis = calculate_rent_vs_buy(
         home_price=max_home_price,
         down_payment=family_info['savings'],
-        interest_rate=4.5,  # Assumed fixed rate
+        interest_rate=4.5,
         loan_term=30,
-        monthly_rent=family_info['monthly_expenses'],  # Using current expenses as rent estimate
+        monthly_rent=family_info['monthly_expenses'],
         property_tax_rate=1.2,
         maintenance_cost_percent=1.0,
         home_appreciation_rate=3.0,
@@ -203,7 +210,7 @@ def create_pdf_report(output_path, report_data, family_info, preferences):
     ))
     story.append(Spacer(1, 20))
     
-    # Neighborhood Recommendations
+    # Neighborhood Recommendations with Historical Data
     story.append(Paragraph("Recommended Neighborhoods", styles['Heading2']))
     for hood in report_data['recommended_neighborhoods']:
         story.append(Paragraph(
@@ -212,6 +219,14 @@ def create_pdf_report(output_path, report_data, family_info, preferences):
         ))
         for reason in hood['reasons']:
             story.append(Paragraph(f"• {reason}", styles['Normal']))
+        
+        # Add historical appreciation data
+        if 'historical_appreciation' in hood:
+            story.append(Paragraph(
+                f"• Historical Property Value Appreciation: {hood['historical_appreciation']:.1f}%",
+                styles['Normal']
+            ))
+        
         story.append(Spacer(1, 10))
     
     # Generate PDF
