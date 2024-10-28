@@ -5,6 +5,80 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from utils.financial_calculations import calculate_rent_vs_buy
 
+def calculate_neighborhood_match(preferences):
+    """Calculate neighborhood matches based on user preferences."""
+    from utils.database import get_neighborhood_data
+    
+    # Get all neighborhoods
+    neighborhoods = get_neighborhood_data()
+    
+    matches = []
+    for hood in neighborhoods:
+        match_score = 0
+        reasons = []
+        
+        # Calculate urban/suburban match
+        urban_scores = {
+            "Very Urban": 10,
+            "Somewhat Urban": 7.5,
+            "Mixed": 5,
+            "Somewhat Suburban": 2.5,
+            "Very Suburban": 0
+        }
+        urban_match = 10 - abs(urban_scores[preferences['housing_type']] - hood['walkability_score'])
+        match_score += urban_match
+        
+        # Transport preference match
+        transport_scores = {
+            "Walking": hood['walkability_score'],
+            "Public Transit": hood['transport_score'],
+            "Mix": (hood['walkability_score'] + hood['transport_score']) / 2,
+            "Personal Vehicle": 10 - hood['transport_score']/2  # Less reliance on public transport
+        }
+        transport_match = transport_scores[preferences['transport']]
+        match_score += transport_match
+        
+        # Lifestyle matches
+        if preferences['nightlife'] > 7:
+            nightlife_match = hood['walkability_score']
+            match_score += nightlife_match
+            if nightlife_match > 7:
+                reasons.append("Great nightlife and entertainment options")
+        
+        if preferences['shopping'] > 7:
+            shopping_match = hood['walkability_score']
+            match_score += shopping_match
+            if shopping_match > 7:
+                reasons.append("Excellent shopping accessibility")
+        
+        if preferences['outdoor'] > 7:
+            outdoor_match = 10 - hood['cost_of_living']/2  # Assuming less dense areas have more outdoor spaces
+            match_score += outdoor_match
+            if outdoor_match > 7:
+                reasons.append("Good access to outdoor activities")
+        
+        if preferences['quiet'] > 7:
+            quiet_match = 10 - hood['walkability_score']/2  # Assuming less urban areas are quieter
+            match_score += quiet_match
+            if quiet_match > 7:
+                reasons.append("Quiet and peaceful environment")
+        
+        # Normalize score to percentage
+        final_score = int((match_score / 50) * 100)  # 50 is max possible score
+        
+        # Add to matches if score is above 50%
+        if final_score >= 50:
+            matches.append({
+                "neighborhood": hood,
+                "match_score": final_score,
+                "reasons": reasons
+            })
+    
+    # Sort by match score
+    matches.sort(key=lambda x: x['match_score'], reverse=True)
+    
+    return matches
+
 def calculate_affordability(annual_income, savings, monthly_expenses):
     """Calculate maximum affordable home price based on financial situation."""
     # Common rules of thumb:
