@@ -200,6 +200,81 @@ def display_report_results():
                             st.error(f'Could not analyze market data for {hood.get("name", "unknown")}')
     else:
         st.warning('Please complete the lifestyle quiz to see neighborhood analysis.')
+    
+    # Add feedback section
+    st.divider()
+    st.header("📝 Your Feedback")
+    feedback_rating = st.slider("How satisfied are you with this analysis? (1-10)", 1, 10, 5)
+    if feedback_rating:
+        st.write(f"Thank you for your rating of {feedback_rating}/10!")
+
+    # What's Next section
+    st.divider()
+    st.header("👉 What Would You Like to Do Next?")
+    st.write("Choose your next step in your home search journey:")
+
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if st.button("💰 Calculate Mortgage"):
+            st.switch_page("pages/mortgage_calculator.py")
+        st.caption("Get pre-qualified and calculate your monthly payments")
+    
+    with col2:
+        if st.button("🏠 See Neighborhood Listings"):
+            # Display property listings for recommended neighborhoods
+            st.header("Available Properties")
+            for match in st.session_state.report_data['recommended_neighborhoods']:
+                hood = match['neighborhood']
+                if 'property_listings' in hood:
+                    listings = json.loads(hood['property_listings']) if isinstance(hood['property_listings'], str) else hood['property_listings']
+                    if listings:
+                        st.subheader(f"Properties in {hood['name']}")
+                        for listing in listings:
+                            with st.expander(f"${listing['price']:,} - {listing['bedrooms']}bd/{listing['bathrooms']}ba"):
+                                col1, col2 = st.columns(2)
+                                with col1:
+                                    st.metric("Square Feet", f"{listing['sqft']:,}")
+                                    st.metric("Year Built", listing['year_built'])
+                                with col2:
+                                    st.metric("Price/sqft", f"${listing['price']/listing['sqft']:,.2f}")
+                                st.write(listing['description'])
+        st.caption("View available properties in your matched neighborhoods")
+    
+    with col3:
+        if st.button("🌟 Visualize Your Day"):
+            st.header("A Day in Your New Neighborhood")
+            for match in st.session_state.report_data['recommended_neighborhoods']:
+                hood = match['neighborhood']
+                with st.expander(f"Daily Life in {hood['name']}", expanded=True):
+                    st.subheader("🍳 Morning Routine")
+                    st.write("Breakfast Options:")
+                    st.write("- Local Cafe: 'Morning Brew' - Known for artisanal coffee and fresh pastries")
+                    st.write("- Family Diner: 'Sunrise Kitchen' - Popular weekend brunch spot")
+                    
+                    st.subheader("🚶‍♂️ Family Activities")
+                    st.write("Walking Routes:")
+                    st.write("- Community Park Trail: Perfect for morning walks")
+                    st.write("- Riverside Path: Scenic route for evening strolls")
+                    
+                    st.subheader("🛒 Shopping & Errands")
+                    st.write("Grocery Options:")
+                    st.write("- Whole Foods Market: 10-minute walk")
+                    st.write("- Local Farmers Market: Weekend mornings")
+                    
+                    st.subheader("🚇 Transportation")
+                    st.write("Public Transit:")
+                    st.write(f"- Nearest Bus Stop: {hood['name']} Central")
+                    st.write("- Metro Station: 5-minute walk to Green Line")
+                    
+                    st.subheader("🌙 Date Night Ideas")
+                    st.write("Restaurant Recommendations:")
+                    st.write("- 'The Bistro' - Romantic Italian dining")
+                    st.write("- 'Sushi Star' - Popular fusion restaurant")
+                    st.write("Entertainment:")
+                    st.write("- Local Theater: Weekly shows and performances")
+                    st.write("- Wine Bar: 'Vintage Room' with live jazz")
+        st.caption("Experience a typical day in your potential new neighborhood")
 
     # Clean up the temporary PDF file
     if os.path.exists(pdf_path):
