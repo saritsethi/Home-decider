@@ -7,14 +7,14 @@ from utils.visualization import create_neighborhood_comparison_chart
 
 st.set_page_config(page_title="Neighborhood Comparison", page_icon="🏘️")
 
-def display_comparison_results(city, selected_neighborhoods):
+def display_comparison_results(state, city, selected_neighborhoods):
     """Display neighborhood comparison results."""
     if not selected_neighborhoods:
         st.warning("Please select at least one neighborhood to compare.")
         return
         
     # Get neighborhood data
-    neighborhood_data = get_neighborhood_data(city)
+    neighborhood_data = get_neighborhood_data(city=city, state=state)
     
     # Filter for selected neighborhoods
     selected_data = [
@@ -48,11 +48,11 @@ def main():
     """)
     
     # Get user inputs
-    city, selected_neighborhoods = create_neighborhood_inputs()
+    state, city, selected_neighborhoods = create_neighborhood_inputs()
     
     # Add Compare button
     if st.button("Compare Neighborhoods", type="primary"):
-        display_comparison_results(city, selected_neighborhoods)
+        display_comparison_results(state, city, selected_neighborhoods)
 
 if __name__ == "__main__":
     main()

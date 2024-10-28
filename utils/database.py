@@ -18,10 +18,19 @@ def init_database():
     conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
     cur = conn.cursor()
     
-    # Create neighborhoods table
+    # Backup existing data
+    cur.execute("SELECT * FROM neighborhoods") if table_exists(cur, 'neighborhoods') else None
+    existing_data = cur.fetchall() if table_exists(cur, 'neighborhoods') else []
+    
+    # Drop and recreate neighborhoods table with new schema
+    if table_exists(cur, 'neighborhoods'):
+        cur.execute("DROP TABLE neighborhoods")
+    
+    # Create neighborhoods table with state column
     cur.execute("""
         CREATE TABLE IF NOT EXISTS neighborhoods (
             id SERIAL PRIMARY KEY,
+            state TEXT NOT NULL,
             city TEXT NOT NULL,
             name TEXT NOT NULL,
             cost_of_living FLOAT,
@@ -47,24 +56,38 @@ def init_database():
     
     if count == 0:
         sample_data = [
-            ('San Francisco', 'Mission District', 8.5, 7.0, 9.0, 9.5),
-            ('San Francisco', 'Pacific Heights', 9.5, 8.5, 7.5, 8.0),
-            ('New York', 'Brooklyn Heights', 8.0, 8.5, 9.0, 9.0),
-            ('New York', 'Upper West Side', 9.0, 9.0, 9.5, 9.0),
-            ('Chicago', 'Lincoln Park', 7.5, 8.0, 8.5, 8.5),
-            ('Chicago', 'Wicker Park', 7.0, 7.5, 8.5, 9.0),
-            ('Austin', 'South Congress', 6.5, 7.0, 7.0, 8.0),
-            ('Austin', 'Domain', 7.0, 8.0, 6.5, 7.0)
+            ('CA', 'San Francisco', 'Mission District', 8.5, 7.0, 9.0, 9.5),
+            ('CA', 'San Francisco', 'Pacific Heights', 9.5, 8.5, 7.5, 8.0),
+            ('CA', 'Los Angeles', 'Santa Monica', 9.0, 8.0, 8.0, 9.0),
+            ('CA', 'Los Angeles', 'Silver Lake', 8.0, 7.5, 7.5, 8.5),
+            ('NY', 'New York', 'Brooklyn Heights', 8.0, 8.5, 9.0, 9.0),
+            ('NY', 'New York', 'Upper West Side', 9.0, 9.0, 9.5, 9.0),
+            ('IL', 'Chicago', 'Lincoln Park', 7.5, 8.0, 8.5, 8.5),
+            ('IL', 'Chicago', 'Wicker Park', 7.0, 7.5, 8.5, 9.0),
+            ('TX', 'Austin', 'South Congress', 6.5, 7.0, 7.0, 8.0),
+            ('TX', 'Austin', 'Domain', 7.0, 8.0, 6.5, 7.0),
+            ('TX', 'Dallas', 'Uptown', 7.5, 8.0, 7.0, 8.5),
+            ('TX', 'Dallas', 'Bishop Arts', 7.0, 7.5, 7.5, 8.0)
         ]
         
         cur.executemany("""
             INSERT INTO neighborhoods 
-            (city, name, cost_of_living, school_rating, transport_score, walkability_score)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            (state, city, name, cost_of_living, school_rating, transport_score, walkability_score)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
         """, sample_data)
     
     cur.close()
     conn.close()
+
+def table_exists(cur, table_name):
+    """Check if a table exists in the database."""
+    cur.execute("""
+        SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_name = %s
+        )
+    """, (table_name,))
+    return cur.fetchone()[0]
 
 def save_quiz_results(session_id, preferences):
     """Save quiz results to database."""
@@ -80,32 +103,53 @@ def save_quiz_results(session_id, preferences):
     cur.close()
     conn.close()
 
-def get_neighborhood_data(city=None):
-    """Retrieve neighborhood data, optionally filtered by city."""
+def get_available_states():
+    """Get list of all unique states from the neighborhoods table."""
     conn = get_db_connection()
     cur = conn.cursor()
     
-    if city:
-        cur.execute("SELECT * FROM neighborhoods WHERE city = %s", (city,))
-    else:
-        cur.execute("SELECT * FROM neighborhoods")
-    
-    columns = ['id', 'city', 'name', 'cost_of_living', 'school_rating', 'transport_score', 'walkability_score']
-    results = [dict(zip(columns, row)) for row in cur.fetchall()]
+    cur.execute("SELECT DISTINCT state FROM neighborhoods ORDER BY state")
+    states = [row[0] for row in cur.fetchall()]
     
     cur.close()
     conn.close()
-    return results
+    
+    return states if states else ["No states available"]
 
-def get_available_cities():
-    """Get list of all unique cities from the neighborhoods table."""
+def get_available_cities(state=None):
+    """Get list of all unique cities, optionally filtered by state."""
     conn = get_db_connection()
     cur = conn.cursor()
     
-    cur.execute("SELECT DISTINCT city FROM neighborhoods ORDER BY city")
+    if state:
+        cur.execute("SELECT DISTINCT city FROM neighborhoods WHERE state = %s ORDER BY city", (state,))
+    else:
+        cur.execute("SELECT DISTINCT city FROM neighborhoods ORDER BY city")
+    
     cities = [row[0] for row in cur.fetchall()]
     
     cur.close()
     conn.close()
     
     return cities if cities else ["No cities available"]
+
+def get_neighborhood_data(city=None, state=None):
+    """Retrieve neighborhood data, optionally filtered by city and state."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    if state and city:
+        cur.execute("SELECT * FROM neighborhoods WHERE state = %s AND city = %s", (state, city))
+    elif state:
+        cur.execute("SELECT * FROM neighborhoods WHERE state = %s", (state,))
+    elif city:
+        cur.execute("SELECT * FROM neighborhoods WHERE city = %s", (city,))
+    else:
+        cur.execute("SELECT * FROM neighborhoods")
+    
+    columns = ['id', 'state', 'city', 'name', 'cost_of_living', 'school_rating', 'transport_score', 'walkability_score']
+    results = [dict(zip(columns, row)) for row in cur.fetchall()]
+    
+    cur.close()
+    conn.close()
+    return results
