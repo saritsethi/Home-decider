@@ -60,7 +60,8 @@ def init_database():
             school_rating FLOAT,
             transport_score FLOAT,
             walkability_score FLOAT,
-            historical_values JSONB DEFAULT '[]'::jsonb
+            historical_values JSONB DEFAULT '[]'::jsonb,
+            property_listings JSONB DEFAULT '[]'::jsonb
         )
     """)
     
@@ -76,23 +77,129 @@ def init_database():
             END IF;
         END $$;
     """)
+
+    # Add property_listings column if it doesn't exist
+    cur.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT FROM information_schema.columns 
+                WHERE table_name = 'neighborhoods' AND column_name = 'property_listings'
+            ) THEN
+                ALTER TABLE neighborhoods ADD COLUMN property_listings JSONB DEFAULT '[]'::jsonb;
+            END IF;
+        END $$;
+    """)
     
     # Insert sample data if table is empty
     cur.execute("SELECT COUNT(*) FROM neighborhoods")
     count = cur.fetchone()[0]
     
     if count == 0:
+        # Sample listings for each neighborhood
+        sample_listings = {
+            'Lincoln Park': [
+                {
+                    'address': '2100 N Lincoln Park W',
+                    'price': 750000,
+                    'bedrooms': 3,
+                    'bathrooms': 2,
+                    'sqft': 1800,
+                    'year_built': 2015,
+                    'description': 'Modern condo with park views'
+                },
+                {
+                    'address': '2200 N Clark St',
+                    'price': 899000,
+                    'bedrooms': 4,
+                    'bathrooms': 3,
+                    'sqft': 2200,
+                    'year_built': 2018,
+                    'description': 'Luxury townhouse with rooftop deck'
+                },
+                {
+                    'address': '1900 N Lincoln Ave',
+                    'price': 649000,
+                    'bedrooms': 2,
+                    'bathrooms': 2,
+                    'sqft': 1500,
+                    'year_built': 2012,
+                    'description': 'Updated vintage condo near the zoo'
+                }
+            ],
+            'Wicker Park': [
+                {
+                    'address': '1600 N Milwaukee Ave',
+                    'price': 625000,
+                    'bedrooms': 3,
+                    'bathrooms': 2,
+                    'sqft': 1700,
+                    'year_built': 2010,
+                    'description': 'Modern loft in historic building'
+                },
+                {
+                    'address': '1800 W Division St',
+                    'price': 549000,
+                    'bedrooms': 2,
+                    'bathrooms': 2,
+                    'sqft': 1400,
+                    'year_built': 2016,
+                    'description': 'Contemporary condo with city views'
+                }
+            ],
+            'Lake View': [
+                {
+                    'address': '3500 N Lake Shore Dr',
+                    'price': 699000,
+                    'bedrooms': 3,
+                    'bathrooms': 2,
+                    'sqft': 1600,
+                    'year_built': 2014,
+                    'description': 'Lakefront condo with beach access'
+                },
+                {
+                    'address': '1200 W Addison St',
+                    'price': 575000,
+                    'bedrooms': 2,
+                    'bathrooms': 2,
+                    'sqft': 1300,
+                    'year_built': 2017,
+                    'description': 'Modern unit near Wrigley Field'
+                }
+            ],
+            'West Loop': [
+                {
+                    'address': '1000 W Madison St',
+                    'price': 850000,
+                    'bedrooms': 3,
+                    'bathrooms': 2.5,
+                    'sqft': 2000,
+                    'year_built': 2019,
+                    'description': 'Luxury loft in restaurant row'
+                },
+                {
+                    'address': '123 N Green St',
+                    'price': 725000,
+                    'bedrooms': 2,
+                    'bathrooms': 2,
+                    'sqft': 1600,
+                    'year_built': 2020,
+                    'description': 'Designer finishes throughout'
+                }
+            ]
+        }
+
         sample_data = [
-            ('IL', 'Chicago', 'Lincoln Park', 8.5, 9.0, 8.5, 9.0, generate_historical_values(800000)),
-            ('IL', 'Chicago', 'Wicker Park', 8.0, 8.5, 9.0, 9.0, generate_historical_values(650000)),
-            ('IL', 'Chicago', 'Lake View', 8.5, 8.5, 9.0, 8.5, generate_historical_values(700000)),
-            ('IL', 'Chicago', 'West Loop', 9.0, 8.0, 9.0, 9.5, generate_historical_values(900000))
+            ('IL', 'Chicago', 'Lincoln Park', 8.5, 9.0, 8.5, 9.0, generate_historical_values(800000), json.dumps(sample_listings['Lincoln Park'])),
+            ('IL', 'Chicago', 'Wicker Park', 8.0, 8.5, 9.0, 9.0, generate_historical_values(650000), json.dumps(sample_listings['Wicker Park'])),
+            ('IL', 'Chicago', 'Lake View', 8.5, 8.5, 9.0, 8.5, generate_historical_values(700000), json.dumps(sample_listings['Lake View'])),
+            ('IL', 'Chicago', 'West Loop', 9.0, 8.0, 9.0, 9.5, generate_historical_values(900000), json.dumps(sample_listings['West Loop']))
         ]
         
         cur.executemany("""
             INSERT INTO neighborhoods 
-            (state, city, name, cost_of_living, school_rating, transport_score, walkability_score, historical_values)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            (state, city, name, cost_of_living, school_rating, transport_score, walkability_score, historical_values, property_listings)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, sample_data)
     
     cur.close()
@@ -139,33 +246,33 @@ def get_neighborhood_data(city=None, state=None):
     if state and city:
         cur.execute("""
             SELECT id, state, city, name, cost_of_living, school_rating, 
-                   transport_score, walkability_score, historical_values
+                   transport_score, walkability_score, historical_values, property_listings
             FROM neighborhoods 
             WHERE state = %s AND city = %s
         """, (state, city))
     elif state:
         cur.execute("""
             SELECT id, state, city, name, cost_of_living, school_rating, 
-                   transport_score, walkability_score, historical_values
+                   transport_score, walkability_score, historical_values, property_listings
             FROM neighborhoods 
             WHERE state = %s
         """, (state,))
     elif city:
         cur.execute("""
             SELECT id, state, city, name, cost_of_living, school_rating, 
-                   transport_score, walkability_score, historical_values
+                   transport_score, walkability_score, historical_values, property_listings
             FROM neighborhoods 
             WHERE city = %s
         """, (city,))
     else:
         cur.execute("""
             SELECT id, state, city, name, cost_of_living, school_rating, 
-                   transport_score, walkability_score, historical_values
+                   transport_score, walkability_score, historical_values, property_listings
             FROM neighborhoods
         """)
     
     columns = ['id', 'state', 'city', 'name', 'cost_of_living', 'school_rating', 
-               'transport_score', 'walkability_score', 'historical_values']
+               'transport_score', 'walkability_score', 'historical_values', 'property_listings']
     results = [dict(zip(columns, row)) for row in cur.fetchall()]
     
     cur.close()

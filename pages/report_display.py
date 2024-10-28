@@ -177,6 +177,24 @@ def display_report_results():
                     st.metric("Walkability", f"{match['neighborhood']['walkability_score']}/10")
     else:
         st.warning("No matching neighborhoods found based on your preferences.")
+    
+    # Add Available Properties Section
+    st.header("🏠 Available Properties")
+    for match in st.session_state.report_data['recommended_neighborhoods']:
+        hood = match['neighborhood']
+        if hood.get('property_listings'):
+            st.subheader(f"Properties in {hood['name']}")
+            listings = json.loads(hood['property_listings']) if isinstance(hood['property_listings'], str) else hood['property_listings']
+            
+            for listing in listings:
+                with st.expander(f"${listing['price']:,} - {listing['bedrooms']}bd/{listing['bathrooms']}ba"):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.metric("Square Feet", f"{listing['sqft']:,}")
+                        st.metric("Year Built", listing['year_built'])
+                    with col2:
+                        st.metric("Price/sqft", f"${listing['price']/listing['sqft']:,.2f}")
+                    st.write(listing['description'])
 
 if __name__ == "__main__":
     display_report_results()
