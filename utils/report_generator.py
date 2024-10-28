@@ -7,19 +7,31 @@ from utils.financial_calculations import calculate_rent_vs_buy
 import json
 from datetime import datetime
 
-def calculate_neighborhood_match(preferences):
-    """Calculate neighborhood matches based on user preferences."""
-    from utils.database import get_neighborhood_data
+def calculate_affordability(annual_income, savings, monthly_expenses):
+    """Calculate maximum affordable home price based on financial situation."""
+    monthly_income = annual_income / 12
+    max_monthly_payment = monthly_income * 0.28
+    available_monthly_payment = max_monthly_payment - monthly_expenses
+    max_price_from_income = (available_monthly_payment * 12 * 20)
+    max_price_from_savings = savings * 5
+    return min(max_price_from_income, max_price_from_savings)
+
+def generate_integrated_report(preferences, family_info, neighborhoods):
+    """Generate comprehensive report with recommendations."""
+    # neighborhoods is now a direct list, not wrapped in a match structure
+    max_home_price = calculate_affordability(
+        family_info['annual_income'],
+        family_info['savings'],
+        family_info['monthly_expenses']
+    )
     
-    # Get neighborhoods filtered by city and state
-    neighborhoods = get_neighborhood_data(city=preferences['city'], state=preferences['state'])
-    
+    # Calculate matches for each neighborhood
     matches = []
     for hood in neighborhoods:
         match_score = 0
         reasons = []
         
-        # Calculate urban/suburban match
+        # Urban/suburban match
         urban_scores = {
             "Very Urban": 10,
             "Somewhat Urban": 7.5,
@@ -75,84 +87,24 @@ def calculate_neighborhood_match(preferences):
             if quiet_match > 7:
                 reasons.append("Quiet and peaceful environment")
         
-        # Normalize score to percentage
-        final_score = int((match_score / 60) * 100)  # 60 is max possible score (including appreciation)
-        
-        # Add to matches if score is above 50%
-        if final_score >= 50:
-            matches.append({
-                "neighborhood": hood,
-                "match_score": final_score,
-                "reasons": reasons
-            })
+        # Filter based on affordability
+        if hood['cost_of_living'] * max_home_price / 10 <= max_home_price:
+            # Calculate final score as percentage
+            final_score = int((match_score / 60) * 100)  # 60 is max possible score
+            if final_score >= 50:  # Only include matches with >50% score
+                matches.append({
+                    "neighborhood": hood,
+                    "match_score": final_score,
+                    "reasons": reasons
+                })
     
-    # Sort by match score
+    # Sort matches by score
     matches.sort(key=lambda x: x['match_score'], reverse=True)
-    return matches
-
-def calculate_affordability(annual_income, savings, monthly_expenses):
-    """Calculate maximum affordable home price based on financial situation."""
-    monthly_income = annual_income / 12
-    max_monthly_payment = monthly_income * 0.28
-    available_monthly_payment = max_monthly_payment - monthly_expenses
-    max_price_from_income = (available_monthly_payment * 12 * 20)
-    max_price_from_savings = savings * 5
-    return min(max_price_from_income, max_price_from_savings)
-
-def generate_integrated_report(preferences, family_info, matched_neighborhoods):
-    """Generate comprehensive report with recommendations."""
-    max_home_price = calculate_affordability(
-        family_info['annual_income'],
-        family_info['savings'],
-        family_info['monthly_expenses']
-    )
-    
-    # Filter neighborhoods based on affordability
-    affordable_neighborhoods = [
-        n for n in matched_neighborhoods
-        if n['neighborhood']['cost_of_living'] * max_home_price / 10 <= max_home_price
-    ]
-    
-    # Adjust neighborhood scores based on family needs and historical performance
-    for hood in affordable_neighborhoods:
-        historical_data = hood['neighborhood']['historical_values'] if isinstance(hood['neighborhood']['historical_values'], list) else json.loads(hood['neighborhood']['historical_values'])
-        if len(historical_data) >= 2:
-            start_value = historical_data[0]['value']
-            end_value = historical_data[-1]['value']
-            appreciation = ((end_value - start_value) / start_value) * 100
-            hood['historical_appreciation'] = appreciation
-        
-        # Increase importance of school ratings for families with children
-        if family_info['children'] > 0:
-            school_bonus = hood['neighborhood']['school_rating'] / 10 * 25
-            hood['match_score'] = (hood['match_score'] * 3 + school_bonus) / 4
-    
-    # Sort by adjusted scores
-    recommended_neighborhoods = sorted(
-        affordable_neighborhoods,
-        key=lambda x: x['match_score'],
-        reverse=True
-    )[:5]
-    
-    # Calculate rent vs buy recommendation
-    financial_analysis = calculate_rent_vs_buy(
-        home_price=max_home_price,
-        down_payment=family_info['savings'],
-        interest_rate=4.5,
-        loan_term=30,
-        monthly_rent=family_info['monthly_expenses'],
-        property_tax_rate=1.2,
-        maintenance_cost_percent=1.0,
-        home_appreciation_rate=3.0,
-        rent_increase_rate=2.0,
-        investment_return_rate=7.0
-    )
     
     return {
         'max_home_price': max_home_price,
-        'recommended_neighborhoods': recommended_neighborhoods,
-        'financial_analysis': financial_analysis,
-        'rent_vs_buy_recommendation': 'buy' if financial_analysis['Cumulative_Buying_Costs'].iloc[-1] < financial_analysis['Cumulative_Rental_Costs'].iloc[-1] else 'rent'
+        'recommended_neighborhoods': matches[:5],
+        'rent_vs_buy_recommendation': 'buy' if max_home_price > family_info['current_monthly_rent'] * 12 * 20 else 'rent'
     }
 
 def create_pdf_report(output_path, report_data, family_info, preferences):
@@ -219,10 +171,17 @@ def create_pdf_report(output_path, report_data, family_info, preferences):
         for reason in hood['reasons']:
             story.append(Paragraph(f"• {reason}", styles['Normal']))
         
-        # Add historical appreciation data
-        if 'historical_appreciation' in hood:
+        # Add historical value trend
+        historical_data = hood['neighborhood']['historical_values']
+        if isinstance(historical_data, str):
+            historical_data = json.loads(historical_data)
+        
+        if len(historical_data) >= 2:
+            start_value = historical_data[0]['value']
+            end_value = historical_data[-1]['value']
+            appreciation = ((end_value - start_value) / start_value) * 100
             story.append(Paragraph(
-                f"• Historical Property Value Appreciation: {hood['historical_appreciation']:.1f}%",
+                f"• Historical Property Value Appreciation: {appreciation:.1f}%",
                 styles['Normal']
             ))
         

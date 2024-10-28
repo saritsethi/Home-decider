@@ -104,23 +104,6 @@ def init_database():
     cur.close()
     conn.close()
 
-def save_quiz_results(session_id, preferences, family_info=None):
-    """Save quiz results to database."""
-    conn = get_db_connection()
-    cur = conn.cursor()
-    
-    cur.execute(
-        """
-        INSERT INTO quiz_results (session_id, preferences, family_info) 
-        VALUES (%s, %s, %s)
-        """,
-        (session_id, preferences, family_info)
-    )
-    
-    conn.commit()
-    cur.close()
-    conn.close()
-
 def get_available_states():
     """Get list of all unique states from the neighborhoods table."""
     conn = get_db_connection()
@@ -139,8 +122,11 @@ def get_available_cities(state=None):
     conn = get_db_connection()
     cur = conn.cursor()
     
-    if state:
-        cur.execute("SELECT DISTINCT city FROM neighborhoods WHERE state = %s ORDER BY city", (state,))
+    if state and state != "No states available":
+        cur.execute(
+            "SELECT DISTINCT city FROM neighborhoods WHERE state = %s ORDER BY city",
+            (state,)
+        )
     else:
         cur.execute("SELECT DISTINCT city FROM neighborhoods ORDER BY city")
     
@@ -191,3 +177,20 @@ def get_neighborhood_data(city=None, state=None):
     cur.close()
     conn.close()
     return results
+
+def save_quiz_results(session_id, preferences, family_info=None):
+    """Save quiz results to database."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    cur.execute(
+        """
+        INSERT INTO quiz_results (session_id, preferences, family_info) 
+        VALUES (%s, %s, %s)
+        """,
+        (session_id, preferences, family_info)
+    )
+    
+    conn.commit()
+    cur.close()
+    conn.close()
