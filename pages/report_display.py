@@ -117,8 +117,19 @@ def display_report_results():
             
             st.divider()
         
-        # Create tabs for trends and analysis
+        # Create radar chart comparing neighborhoods
         if neighborhoods := [match['neighborhood'] for match in st.session_state.report_data['recommended_neighborhoods']]:
+            st.subheader("Neighborhood Comparison")
+            
+            # Create and display radar chart
+            radar_fig = create_neighborhood_comparison_chart(neighborhoods)
+            if radar_fig:
+                st.plotly_chart(radar_fig, use_container_width=True)
+            else:
+                st.warning("Could not create neighborhood comparison visualization.")
+        
+        # Create tabs for trends and analysis
+        if neighborhoods:
             trend_tabs = st.tabs(['Value Trends', 'Growth Rates', 'Market Analysis'])
             
             with trend_tabs[0]:
