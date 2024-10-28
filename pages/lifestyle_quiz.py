@@ -2,8 +2,6 @@ import streamlit as st
 import json
 import uuid
 import os
-from streamlit.runtime.scriptrunner import add_script_run_ctx
-from streamlit.runtime.scriptrunner.script_run_context import get_script_run_ctx
 from components.navigation import create_navigation
 from utils.database import save_quiz_results, get_neighborhood_data, get_available_states, get_available_cities
 from utils.report_generator import generate_integrated_report
@@ -124,7 +122,7 @@ def display_lifestyle_preferences():
                 json.dumps({**st.session_state.family_info, **st.session_state.financial_info})
             )
             
-            # Redirect to report page
+            # Switch to report page using st.switch_page
             st.switch_page("pages/report_display.py")
 
 def display_current_step():
