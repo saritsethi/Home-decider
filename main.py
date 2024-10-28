@@ -80,6 +80,33 @@ def main():
     </div>
     """, unsafe_allow_html=True)
     
+    # Introduction Section
+    st.markdown('''
+    <div style="text-align: center; padding: 2rem 0;">
+        <h2>How It Works</h2>
+        <p style="font-size: 1.2rem; color: #6c757d; margin: 1rem 0;">
+            Our comprehensive quiz helps you make informed decisions about your next home:
+        </p>
+        <ol style="text-align: left; max-width: 600px; margin: 0 auto; font-size: 1.1rem;">
+            <li>Share your family details and preferences</li>
+            <li>Tell us about your financial situation</li>
+            <li>Choose your lifestyle preferences</li>
+        </ol>
+        <div style="margin: 2rem 0;">
+            <a href="/lifestyle_quiz" target="_self" style="
+                background-color: #FF4B4B;
+                color: white;
+                padding: 12px 24px;
+                border-radius: 6px;
+                text-decoration: none;
+                font-weight: bold;
+                font-size: 1.2rem;
+                transition: background-color 0.3s ease;
+            ">Take the Quiz →</a>
+        </div>
+    </div>
+    ''', unsafe_allow_html=True)
+    
     # Feature Cards
     col1, col2, col3 = st.columns(3)
     
@@ -106,15 +133,6 @@ def main():
             "Get personalized neighborhood recommendations",
             "pages/lifestyle_quiz.py"
         )
-    
-    # Quick Start Guide
-    st.markdown("---")
-    st.markdown("""
-    <div style='text-align: center; padding: 1rem;'>
-        <h3>Ready to get started?</h3>
-        <p>Choose any tool above or take our lifestyle quiz for personalized recommendations.</p>
-    </div>
-    """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()

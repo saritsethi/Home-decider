@@ -40,7 +40,7 @@ def calculate_neighborhood_match(preferences):
         match_score += transport_match
         
         # Calculate historical value trend
-        historical_data = json.loads(hood['historical_values'])
+        historical_data = hood['historical_values'] if isinstance(hood['historical_values'], list) else json.loads(hood['historical_values'])
         if len(historical_data) >= 2:
             start_value = historical_data[0]['value']
             end_value = historical_data[-1]['value']
@@ -118,15 +118,31 @@ def display_family_info():
 def display_financial_info():
     with st.form("financial_details_form"):
         st.subheader("Financial Information")
+        
+        # Income and Savings
         annual_income = st.number_input("Annual Household Income ($)", min_value=0, value=50000, step=1000)
         savings = st.number_input("Total Savings ($)", min_value=0, value=10000, step=1000)
-        monthly_expenses = st.number_input("Monthly Expenses ($)", min_value=0, value=2000, step=100)
+        
+        # Current Housing Costs
+        st.subheader("Current Housing Situation")
+        current_monthly_rent = st.number_input("Current Monthly Rent ($)", min_value=0, value=0, step=100)
+        monthly_expenses = st.number_input("Other Monthly Expenses ($)", min_value=0, value=2000, step=100)
+        
+        # Home Buying Preferences
+        st.subheader("Home Buying Preferences")
+        target_home_price = st.number_input("Target Home Purchase Price ($)", min_value=0, value=300000, step=10000)
+        down_payment_percent = st.slider("Down Payment Percentage", min_value=0, max_value=100, value=20)
         
         if st.form_submit_button("Next"):
+            down_payment = target_home_price * (down_payment_percent / 100)
             st.session_state.financial_info = {
                 "annual_income": annual_income,
                 "savings": savings,
-                "monthly_expenses": monthly_expenses
+                "current_monthly_rent": current_monthly_rent,
+                "monthly_expenses": monthly_expenses,
+                "target_home_price": target_home_price,
+                "down_payment": down_payment,
+                "down_payment_percent": down_payment_percent
             }
             st.session_state.current_step = 3
             st.rerun()
@@ -216,7 +232,7 @@ def display_report_results(report_data, preferences):
                 st.write(f"- {reason}")
             
             # Display historical value trend
-            historical_data = json.loads(hood['historical_values'])
+            historical_data = hood['historical_values'] if isinstance(hood['historical_values'], list) else json.loads(hood['historical_values'])
             if len(historical_data) >= 2:
                 from utils.visualization import create_historical_value_chart
                 fig = create_historical_value_chart([hood])
