@@ -62,67 +62,55 @@ def create_neighborhood_comparison_chart(neighborhood_data):
     
     return fig
 
-def parse_historical_values(historical_values):
-    """Safely parse historical values from either string or list format."""
-    try:
-        if isinstance(historical_values, str):
-            data = json.loads(historical_values)
-        elif isinstance(historical_values, list):
-            data = historical_values
-        else:
-            return None
-        
-        # Validate data structure
-        if not all(isinstance(d, dict) and 'date' in d and 'value' in d for d in data):
-            return None
-            
-        return data
-    except (json.JSONDecodeError, TypeError):
-        return None
-
 def create_historical_value_chart(neighborhoods):
     """Create line chart showing historical property values for neighborhoods."""
     fig = go.Figure()
+    valid_data = False
     
-    try:
-        for hood in neighborhoods:
-            historical_data = parse_historical_values(hood['historical_values'])
-            if not historical_data:
+    for hood in neighborhoods:
+        try:
+            # Parse historical values
+            if isinstance(hood['historical_values'], str):
+                historical_data = json.loads(hood['historical_values'])
+            else:
+                historical_data = hood['historical_values']
+            
+            # Validate data structure
+            if not historical_data or not isinstance(historical_data, list):
                 continue
                 
-            try:
-                dates = [datetime.strptime(d['date'], '%Y-%m-%d') for d in historical_data]
-                values = [d['value'] for d in historical_data]
-                
+            dates = []
+            values = []
+            for point in historical_data:
+                try:
+                    date = datetime.strptime(point['date'], '%Y-%m-%d')
+                    value = float(point['value'])
+                    dates.append(date)
+                    values.append(value)
+                except (ValueError, KeyError):
+                    continue
+            
+            if dates and values:
+                valid_data = True
                 fig.add_trace(go.Scatter(
                     x=dates,
                     y=values,
-                    name=f"{hood['name']} ({hood.get('city', '')})",
+                    name=hood['name'],
                     mode='lines+markers'
                 ))
-            except (ValueError, KeyError):
-                continue
-        
-        if len(fig.data) == 0:
-            # If no valid data was added, return None
-            return None
-            
-        fig.update_layout(
-            title='Historical Property Values by Neighborhood',
-            xaxis_title='Date',
-            yaxis_title='Property Value ($)',
-            hovermode='x unified',
-            showlegend=True,
-            legend=dict(
-                orientation="h",
-                yanchor="bottom",
-                y=1.02,
-                xanchor="right",
-                x=1
-            )
-        )
-        
-        return fig
-    except Exception as e:
-        print(f"Error generating historical value chart: {str(e)}")
+        except Exception as e:
+            print(f"Error processing neighborhood {hood.get('name', 'unknown')}: {str(e)}")
+            continue
+    
+    if not valid_data:
         return None
+        
+    fig.update_layout(
+        title='Historical Property Values',
+        xaxis_title='Date',
+        yaxis_title='Property Value ($)',
+        hovermode='x unified',
+        showlegend=True
+    )
+    
+    return fig

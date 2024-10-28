@@ -1,7 +1,7 @@
 import streamlit as st
 from components.navigation import create_navigation
 import json
-from utils.visualization import create_historical_value_chart
+from utils.visualization import create_historical_value_chart, create_neighborhood_comparison_chart
 
 st.set_page_config(page_title="Report Results", page_icon="📊")
 
@@ -91,7 +91,10 @@ def display_report_results():
             # Historical value trends chart
             neighborhoods_for_chart = [match['neighborhood'] for match in st.session_state.report_data['recommended_neighborhoods']]
             fig = create_historical_value_chart(neighborhoods_for_chart)
-            st.plotly_chart(fig, use_container_width=True)
+            if fig is not None:
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.warning("Historical property value data is not available for these neighborhoods.")
         
         with trend_tabs[1]:
             # Calculate and display growth rates
@@ -128,6 +131,10 @@ def display_report_results():
     # Neighborhood Recommendations
     st.header("🏘️ Recommended Neighborhoods")
     if st.session_state.report_data['recommended_neighborhoods']:
+        # Add neighborhood comparison chart
+        fig = create_neighborhood_comparison_chart([match['neighborhood'] for match in st.session_state.report_data['recommended_neighborhoods']])
+        st.plotly_chart(fig, use_container_width=True)
+        
         for idx, match in enumerate(st.session_state.report_data['recommended_neighborhoods']):
             with st.expander(f"#{idx+1}: {match['neighborhood']['name']} - {match['match_score']}% Match", expanded=idx==0):
                 col1, col2 = st.columns(2)
