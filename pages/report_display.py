@@ -18,6 +18,22 @@ def get_pdf_download_link(pdf_path, link_text="Download PDF Report"):
     href = f'<a href="data:application/pdf;base64,{b64}" download="home_decision_report.pdf">{link_text}</a>'
     return href
 
+def display_property_listings(neighborhood):
+    """Display property listings for a neighborhood."""
+    if 'property_listings' in neighborhood:
+        listings = neighborhood['property_listings']
+        if isinstance(listings, str):
+            listings = json.loads(listings)
+        
+        if listings:
+            st.markdown("#### 🏠 Available Properties")
+            for listing in listings:
+                with st.expander(f"${listing['price']:,} - {listing['bedrooms']}bd/{listing['bathrooms']}ba"):
+                    st.write(f"**Address**: {listing['address']}")
+                    st.write(f"**Square Feet**: {listing['sqft']}")
+                    st.write(f"**Year Built**: {listing['year_built']}")
+                    st.write(f"**Description**: {listing['description']}")
+
 def display_report_results():
     if 'report_data' not in st.session_state:
         st.warning("Please complete the lifestyle quiz first!")
@@ -135,6 +151,9 @@ def display_report_results():
                 st.metric("Walkability", f"{hood['walkability_score']}/10")
                 st.metric("Cost of Living", f"{hood['cost_of_living']}/10")
             
+            # Display property listings
+            display_property_listings(hood)
+            
             st.divider()
         
         # Create radar chart comparing neighborhoods
@@ -149,6 +168,32 @@ def display_report_results():
                 st.warning("Could not create neighborhood comparison visualization.")
     else:
         st.warning('Please complete the lifestyle quiz to see neighborhood analysis.')
+
+    # What's Next Section
+    st.header("🎯 What's Next?")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("""
+        ### 💰 Get Pre-Qualified
+        Ready to take the next step? Use our mortgage calculator to estimate your monthly payments and get pre-qualified.
+        """)
+        st.page_link("pages/mortgage_calculator.py", label="Calculate Mortgage", icon="💰")
+    
+    with col2:
+        st.markdown("""
+        ### 🔍 Compare More Areas
+        Want to explore other neighborhoods? Use our comparison tool to find the perfect match.
+        """)
+        st.page_link("pages/neighborhood_comparison.py", label="Compare Areas", icon="🏘️")
+    
+    with col3:
+        st.markdown("""
+        ### 📊 Rent vs Buy Analysis
+        Still deciding between renting and buying? Get a detailed cost comparison.
+        """)
+        st.page_link("pages/rent_vs_buy.py", label="Compare Costs", icon="🧮")
 
     # Add feedback section at the very end
     st.divider()
