@@ -11,8 +11,8 @@ def calculate_neighborhood_match(preferences):
     """Calculate neighborhood matches based on user preferences."""
     from utils.database import get_neighborhood_data
     
-    # Get all neighborhoods
-    neighborhoods = get_neighborhood_data()
+    # Get neighborhoods filtered by city and state
+    neighborhoods = get_neighborhood_data(city=preferences['city'], state=preferences['state'])
     
     matches = []
     for hood in neighborhoods:
@@ -41,7 +41,7 @@ def calculate_neighborhood_match(preferences):
         match_score += transport_match
         
         # Calculate historical value trend
-        historical_data = json.loads(hood['historical_values'])
+        historical_data = hood['historical_values'] if isinstance(hood['historical_values'], list) else json.loads(hood['historical_values'])
         if len(historical_data) >= 2:
             start_value = historical_data[0]['value']
             end_value = historical_data[-1]['value']
@@ -88,7 +88,6 @@ def calculate_neighborhood_match(preferences):
     
     # Sort by match score
     matches.sort(key=lambda x: x['match_score'], reverse=True)
-    
     return matches
 
 def calculate_affordability(annual_income, savings, monthly_expenses):
@@ -116,7 +115,7 @@ def generate_integrated_report(preferences, family_info, matched_neighborhoods):
     
     # Adjust neighborhood scores based on family needs and historical performance
     for hood in affordable_neighborhoods:
-        historical_data = json.loads(hood['neighborhood']['historical_values'])
+        historical_data = hood['neighborhood']['historical_values'] if isinstance(hood['neighborhood']['historical_values'], list) else json.loads(hood['neighborhood']['historical_values'])
         if len(historical_data) >= 2:
             start_value = historical_data[0]['value']
             end_value = historical_data[-1]['value']
@@ -214,7 +213,7 @@ def create_pdf_report(output_path, report_data, family_info, preferences):
     story.append(Paragraph("Recommended Neighborhoods", styles['Heading2']))
     for hood in report_data['recommended_neighborhoods']:
         story.append(Paragraph(
-            f"{hood['neighborhood']['name']} - {hood['match_score']}% Match",
+            f"{hood['neighborhood']['name']} ({preferences['city']}, {preferences['state']}) - {hood['match_score']}% Match",
             styles['Heading3']
         ))
         for reason in hood['reasons']:
@@ -231,5 +230,4 @@ def create_pdf_report(output_path, report_data, family_info, preferences):
     
     # Generate PDF
     doc.build(story)
-    
     return output_path
