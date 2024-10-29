@@ -18,22 +18,6 @@ def get_pdf_download_link(pdf_path, link_text="Download PDF Report"):
     href = f'<a href="data:application/pdf;base64,{b64}" download="home_decision_report.pdf">{link_text}</a>'
     return href
 
-def display_property_listings(neighborhood):
-    """Display property listings for a neighborhood."""
-    if 'property_listings' in neighborhood:
-        listings = neighborhood['property_listings']
-        if isinstance(listings, str):
-            listings = json.loads(listings)
-        
-        if listings:
-            st.markdown("#### 🏠 Available Properties")
-            for listing in listings:
-                with st.expander(f"${listing['price']:,} - {listing['bedrooms']}bd/{listing['bathrooms']}ba"):
-                    st.write(f"**Address**: {listing['address']}")
-                    st.write(f"**Square Feet**: {listing['sqft']}")
-                    st.write(f"**Year Built**: {listing['year_built']}")
-                    st.write(f"**Description**: {listing['description']}")
-
 def display_report_results():
     if 'report_data' not in st.session_state:
         st.warning("Please complete the lifestyle quiz first!")
@@ -85,7 +69,7 @@ def display_report_results():
     Below you'll find detailed analysis of costs, neighborhood trends, and specific recommendations.
     ''')
     
-    st.divider()  # Add visual separator before detailed sections
+    st.divider()
     
     # Financial Analysis Section
     st.header('💰 Cost Analysis')
@@ -175,10 +159,27 @@ def display_report_results():
     with col1:
         if st.button("💰 Calculate Mortgage", use_container_width=True):
             st.subheader("Mortgage Pre-Qualification")
-            annual_income = st.number_input("Annual Income ($)", min_value=0, value=st.session_state.financial_info.get('annual_income', 60000))
-            monthly_debts = st.number_input("Monthly Debts ($)", min_value=0, value=500)
-            down_payment = st.number_input("Down Payment ($)", min_value=0, value=st.session_state.financial_info.get('down_payment', 20000))
-            interest_rate = st.number_input("Interest Rate (%)", min_value=0.0, value=6.5, step=0.1)
+            # Convert all values to float type
+            annual_income = float(st.number_input("Annual Income ($)", 
+                min_value=0.0, 
+                value=float(st.session_state.financial_info.get('annual_income', 60000.0)),
+                step=1000.0
+            ))
+            monthly_debts = float(st.number_input("Monthly Debts ($)", 
+                min_value=0.0, 
+                value=500.0,
+                step=100.0
+            ))
+            down_payment = float(st.number_input("Down Payment ($)", 
+                min_value=0.0, 
+                value=float(st.session_state.financial_info.get('down_payment', 20000.0)),
+                step=1000.0
+            ))
+            interest_rate = float(st.number_input("Interest Rate (%)", 
+                min_value=0.0, 
+                value=6.5, 
+                step=0.1
+            ))
             
             if st.button("Calculate", key="calc_mortgage"):
                 monthly_income = annual_income / 12
