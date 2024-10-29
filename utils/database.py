@@ -100,95 +100,104 @@ def init_database():
         sample_listings = {
             'Lincoln Park': [
                 {
-                    'address': '2100 N Lincoln Park W',
-                    'price': 750000,
+                    'address': '2143 N Sheffield Ave',
+                    'price': 849000,
                     'bedrooms': 3,
-                    'bathrooms': 2,
-                    'sqft': 1800,
-                    'year_built': 2015,
-                    'description': 'Modern condo with park views'
+                    'bathrooms': 2.5,
+                    'sqft': 2100,
+                    'year_built': 2019,
+                    'description': 'Stunning contemporary townhome featuring hardwood floors throughout, gourmet kitchen with stainless steel appliances, spacious primary suite, attached garage, and private rooftop deck. Walking distance to parks and restaurants.'
                 },
                 {
-                    'address': '2200 N Clark St',
-                    'price': 899000,
+                    'address': '1920 N Lincoln Park West',
+                    'price': 1249000,
                     'bedrooms': 4,
                     'bathrooms': 3,
-                    'sqft': 2200,
-                    'year_built': 2018,
-                    'description': 'Luxury townhouse with rooftop deck'
+                    'sqft': 2800,
+                    'year_built': 2015,
+                    'description': 'Elegant corner unit with unobstructed park views, chef's kitchen with high-end appliances, marble bathrooms, custom closets, and 24-hour doorman. Steps to Lincoln Park Zoo and lake.'
                 },
                 {
-                    'address': '1900 N Lincoln Ave',
-                    'price': 649000,
+                    'address': '2238 N Racine Ave',
+                    'price': 725000,
                     'bedrooms': 2,
                     'bathrooms': 2,
-                    'sqft': 1500,
-                    'year_built': 2012,
-                    'description': 'Updated vintage condo near the zoo'
-                }
-            ],
-            'Wicker Park': [
-                {
-                    'address': '1600 N Milwaukee Ave',
-                    'price': 625000,
-                    'bedrooms': 3,
-                    'bathrooms': 2,
-                    'sqft': 1700,
+                    'sqft': 1450,
                     'year_built': 2010,
-                    'description': 'Modern loft in historic building'
-                },
-                {
-                    'address': '1800 W Division St',
-                    'price': 549000,
-                    'bedrooms': 2,
-                    'bathrooms': 2,
-                    'sqft': 1400,
-                    'year_built': 2016,
-                    'description': 'Contemporary condo with city views'
+                    'description': 'Charming vintage condo in prime location, fully renovated with modern finishes, in-unit laundry, balcony, and deeded parking space. Close to DePaul University.'
                 }
             ],
             'Lake View': [
                 {
-                    'address': '3500 N Lake Shore Dr',
-                    'price': 699000,
+                    'address': '3550 N Lake Shore Dr',
+                    'price': 899000,
                     'bedrooms': 3,
-                    'bathrooms': 2,
-                    'sqft': 1600,
-                    'year_built': 2014,
-                    'description': 'Lakefront condo with beach access'
+                    'bathrooms': 2.5,
+                    'sqft': 1900,
+                    'year_built': 2017,
+                    'description': 'Luxury high-rise unit with breathtaking lake views, custom kitchen cabinets, quartz countertops, spa-like bathrooms, and building amenities including fitness center and roof deck.'
                 },
                 {
-                    'address': '1200 W Addison St',
-                    'price': 575000,
+                    'address': '1658 W Addison St',
+                    'price': 679000,
+                    'bedrooms': 3,
+                    'bathrooms': 2,
+                    'sqft': 1650,
+                    'year_built': 2012,
+                    'description': 'Sun-filled corner unit near Wrigley Field, open concept living area, renovated kitchen, hardwood floors, and private outdoor space. Great investment opportunity.'
+                },
+                {
+                    'address': '3845 N Southport Ave',
+                    'price': 599000,
                     'bedrooms': 2,
                     'bathrooms': 2,
-                    'sqft': 1300,
-                    'year_built': 2017,
-                    'description': 'Modern unit near Wrigley Field'
+                    'sqft': 1200,
+                    'year_built': 2016,
+                    'description': 'Modern condo in the heart of Southport Corridor, floor-to-ceiling windows, custom built-ins, premium finishes, and garage parking included. Steps to shopping and dining.'
+                }
+            ],
+            'Wicker Park': [
+                {
+                    'address': '1722 W Division St',
+                    'price': 785000,
+                    'bedrooms': 3,
+                    'bathrooms': 2,
+                    'sqft': 1850,
+                    'year_built': 2018,
+                    'description': 'Contemporary loft-style condo with industrial touches, 11-foot ceilings, exposed brick, chef's kitchen, and private terrace. Prime location near restaurants and Blue Line.'
+                },
+                {
+                    'address': '1515 N Wood St',
+                    'price': 949000,
+                    'bedrooms': 4,
+                    'bathrooms': 3.5,
+                    'sqft': 2400,
+                    'year_built': 2020,
+                    'description': 'Luxurious single-family home with high-end finishes, custom millwork, gourmet kitchen, primary suite with walk-in closet, and landscaped yard with deck.'
                 }
             ],
             'West Loop': [
                 {
-                    'address': '1000 W Madison St',
-                    'price': 850000,
+                    'address': '1040 W Madison St',
+                    'price': 1150000,
                     'bedrooms': 3,
                     'bathrooms': 2.5,
-                    'sqft': 2000,
-                    'year_built': 2019,
-                    'description': 'Luxury loft in restaurant row'
+                    'sqft': 2200,
+                    'year_built': 2021,
+                    'description': 'Ultra-luxury residence in premier building, floor-to-ceiling windows, custom Italian kitchen, smart home features, and world-class amenities including pool and fitness center.'
                 },
                 {
-                    'address': '123 N Green St',
-                    'price': 725000,
+                    'address': '123 S Green St',
+                    'price': 899000,
                     'bedrooms': 2,
                     'bathrooms': 2,
                     'sqft': 1600,
-                    'year_built': 2020,
-                    'description': 'Designer finishes throughout'
+                    'year_built': 2019,
+                    'description': 'Designer finishes throughout this stunning corner unit, waterfall quartz island, wine fridge, custom closets, and balcony with skyline views. Steps to Restaurant Row.'
                 }
             ]
         }
-
+        
         sample_data = [
             ('IL', 'Chicago', 'Lincoln Park', 8.5, 9.0, 8.5, 9.0, generate_historical_values(800000), json.dumps(sample_listings['Lincoln Park'])),
             ('IL', 'Chicago', 'Wicker Park', 8.0, 8.5, 9.0, 9.0, generate_historical_values(650000), json.dumps(sample_listings['Wicker Park'])),
