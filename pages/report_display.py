@@ -226,80 +226,166 @@ def display_report_results():
                 for tab, match in zip(tabs, st.session_state.report_data['recommended_neighborhoods']):
                     hood = match['neighborhood']
                     with tab:
-                        # Create grid layout for activities
-                        col1, col2, col3 = st.columns(3)
-                        
-                        with col1:
-                            st.subheader("🍳 Morning Options")
-                            st.markdown("#### Breakfast & Coffee")
-                            # Add actual Google Places data for cafes and restaurants
-                            if 'Lincoln Park' in hood['name']:
-                                st.write("[Sweet Mandy B's](https://goo.gl/maps/eGckLZAHj3VBKqSt8)")
-                                st.write("⭐ 4.8 (2,000+ reviews)")
-                                st.write("Local bakery & cafe")
+                        # Morning Activities
+                        st.subheader("🌅 Morning")
+                        morning_col1, morning_col2 = st.columns(2)
+                        with morning_col1:
+                            st.markdown("##### Breakfast & Coffee")
+                            if "Lincoln Park" in hood['name']:
+                                st.write("☕ **Sweet Mandy B's**")
+                                st.write("- Local bakery & cafe")
+                                st.write("- Known for fresh pastries")
+                                st.write("- Opens 7:00 AM")
                                 
-                                st.write("[Cafe Vienna](https://goo.gl/maps/QK9Z1XYG5v8RK6at8)")
-                                st.write("⭐ 4.6 (500+ reviews)")
-                                st.write("European breakfast")
-                            
-                            st.markdown("#### Parks & Morning Walks")
-                            # Add actual park data
-                            if 'Lincoln Park' in hood['name']:
-                                st.write("[Lincoln Park Zoo](https://goo.gl/maps/8Q9Z1XYG5v8RK6at8)")
-                                st.write("⭐ 4.8 (30,000+ reviews)")
-                                st.write("Free admission, open daily")
-                        
-                        with col2:
-                            st.subheader("🏃‍♂️ Daily Activities")
-                            st.markdown("#### Grocery Shopping")
-                            # Add actual grocery store data
-                            if 'Lincoln Park' in hood['name']:
-                                st.write("[Trader Joe's](https://goo.gl/maps/7Q9Z1XYG5v8RK6at8)")
-                                st.write("⭐ 4.7 (3,000+ reviews)")
-                                st.write("667 W Diversey Pkwy")
-                            
-                            st.markdown("#### Fitness & Recreation")
-                            # Add actual gym/fitness data
-                            if 'Lincoln Park' in hood['name']:
-                                st.write("[LA Fitness](https://goo.gl/maps/6Q9Z1XYG5v8RK6at8)")
-                                st.write("⭐ 4.5 (1,000+ reviews)")
-                                st.write("Full-service gym")
-                        
-                        with col3:
-                            st.subheader("🌙 Evening Activities")
-                            st.markdown("#### Dining Options")
-                            # Add actual restaurant data
-                            if 'Lincoln Park' in hood['name']:
-                                st.write("[North Pond](https://goo.gl/maps/5Q9Z1XYG5v8RK6at8)")
-                                st.write("⭐ 4.9 (1,500+ reviews)")
-                                st.write("Fine dining with park views")
-                            
-                            st.markdown("#### Entertainment")
-                            # Add actual entertainment venue data
-                            if 'Lincoln Park' in hood['name']:
-                                st.write("[Steppenwolf Theatre](https://goo.gl/maps/4Q9Z1XYG5v8RK6at8)")
-                                st.write("⭐ 4.8 (2,000+ reviews)")
-                                st.write("World-class performances")
+                                st.write("☕ **Elaine's Coffee Call**")
+                                st.write("- Cozy neighborhood spot")
+                                st.write("- Artisanal coffee")
+                                st.write("- Fresh baked goods")
+                            elif "Lake View" in hood['name']:
+                                st.write("☕ **Intelligentsia Coffee**")
+                                st.write("- Premium coffee roaster")
+                                st.write("- Specialty drinks")
+                                st.write("- Opens 6:30 AM")
+                                
+                                st.write("☕ **Ann Sather**")
+                                st.write("- Famous cinnamon rolls")
+                                st.write("- Swedish breakfast")
+                                st.write("- Family friendly")
+                            else:
+                                st.write("Local cafes and breakfast spots")
+                                
+                        with morning_col2:
+                            st.markdown("##### Morning Exercise")
+                            if "Lincoln Park" in hood['name']:
+                                st.write("🏃‍♂️ **Lincoln Park Trail**")
+                                st.write("- 18-mile lakefront path")
+                                st.write("- Popular for morning jogs")
+                                st.write("- Beautiful lake views")
+                            elif "Lake View" in hood['name']:
+                                st.write("🏃‍♂️ **Belmont Harbor Running Path**")
+                                st.write("- Scenic harbor views")
+                                st.write("- 3-mile loop")
+                                st.write("- Exercise stations")
+                            else:
+                                st.write("Local parks and running trails")
 
-                        # Add transportation info at the bottom
+                        # Daily Activities
+                        st.subheader("☀️ Daytime")
+                        day_col1, day_col2 = st.columns(2)
+                        with day_col1:
+                            st.markdown("##### Shopping & Errands")
+                            if "Lincoln Park" in hood['name']:
+                                st.write("🛒 **Trader Joe's**")
+                                st.write("- 667 W Diversey Pkwy")
+                                st.write("- Full grocery selection")
+                                st.write("- Parking available")
+                                
+                                st.write("🛒 **Green City Market**")
+                                st.write("- Local farmers market")
+                                st.write("- Wed & Sat mornings")
+                                st.write("- Fresh produce & artisanal goods")
+                            elif "Lake View" in hood['name']:
+                                st.write("🛒 **Whole Foods Market**")
+                                st.write("- 3201 N Ashland Ave")
+                                st.write("- Organic & local products")
+                                st.write("- Hot food bar")
+                            else:
+                                st.write("Local grocery stores and markets")
+
+                        with day_col2:
+                            st.markdown("##### Recreation")
+                            if "Lincoln Park" in hood['name']:
+                                st.write("🦁 **Lincoln Park Zoo**")
+                                st.write("- Free admission")
+                                st.write("- Open daily")
+                                st.write("- Family friendly")
+                                
+                                st.write("🎨 **Chicago History Museum**")
+                                st.write("- Local history exhibits")
+                                st.write("- Interactive displays")
+                                st.write("- Family programs")
+                            elif "Lake View" in hood['name']:
+                                st.write("⚾ **Wrigley Field**")
+                                st.write("- Historic baseball stadium")
+                                st.write("- Stadium tours available")
+                                st.write("- Year-round events")
+                            else:
+                                st.write("Local attractions and activities")
+
+                        # Evening Options
+                        st.subheader("🌙 Evening")
+                        evening_col1, evening_col2 = st.columns(2)
+                        with evening_col1:
+                            st.markdown("##### Dining")
+                            if "Lincoln Park" in hood['name']:
+                                st.write("🍝 **Cafe Ba-Ba-Reeba!**")
+                                st.write("- Spanish tapas")
+                                st.write("- Lively atmosphere")
+                                st.write("- Great for groups")
+                                
+                                st.write("🍷 **North Pond**")
+                                st.write("- Fine dining")
+                                st.write("- Park views")
+                                st.write("- Special occasion spot")
+                            elif "Lake View" in hood['name']:
+                                st.write("🍣 **Tango Sur**")
+                                st.write("- Argentine steakhouse")
+                                st.write("- BYOB")
+                                st.write("- Intimate setting")
+                            else:
+                                st.write("Local restaurants and eateries")
+
+                        with evening_col2:
+                            st.markdown("##### Entertainment")
+                            if "Lincoln Park" in hood['name']:
+                                st.write("🎭 **Steppenwolf Theatre**")
+                                st.write("- World-class performances")
+                                st.write("- Modern venue")
+                                st.write("- Student discounts")
+                                
+                                st.write("🎵 **Lincoln Hall**")
+                                st.write("- Live music venue")
+                                st.write("- Intimate shows")
+                                st.write("- Full bar")
+                            elif "Lake View" in hood['name']:
+                                st.write("🎬 **Music Box Theatre**")
+                                st.write("- Independent films")
+                                st.write("- Historic venue")
+                                st.write("- Special events")
+                            else:
+                                st.write("Local entertainment venues")
+
+                        # Transportation
                         st.divider()
                         st.subheader("🚇 Getting Around")
-                        col1, col2 = st.columns(2)
-                        with col1:
+                        transport_col1, transport_col2 = st.columns(2)
+                        with transport_col1:
                             st.metric("Walk Score", f"{hood['walkability_score']}/10")
-                            st.write("Nearest Transit:")
-                            if 'Lincoln Park' in hood['name']:
-                                st.write("- Fullerton (Red/Brown/Purple): 0.2 mi")
+                            st.write("**Nearest Transit:**")
+                            if "Lincoln Park" in hood['name']:
+                                st.write("- Fullerton Station (Red/Brown/Purple): 0.2 mi")
                                 st.write("- Clark/Lincoln Bus: 0.1 mi")
-                        with col2:
+                                st.write("- Divvy Bike Station: 0.1 mi")
+                            elif "Lake View" in hood['name']:
+                                st.write("- Belmont Station (Red/Brown/Purple): 0.3 mi")
+                                st.write("- Addison Station (Red): 0.4 mi")
+                                st.write("- Multiple bus routes on Clark")
+                            else:
+                                st.write("Local transit options")
+                                
+                        with transport_col2:
                             st.metric("Transit Score", f"{hood['transport_score']}/10")
-                            st.write("Common Commute Times:")
-                            if 'Lincoln Park' in hood['name']:
+                            st.write("**Common Commute Times:**")
+                            if "Lincoln Park" in hood['name']:
                                 st.write("- Downtown: 15-20 min")
                                 st.write("- O'Hare Airport: 45-50 min")
-
-    # Note about future Google Places API integration
-    st.info("Note: Future updates will include real-time data from Google Places API for more accurate and up-to-date neighborhood information.")
+                                st.write("- Medical District: 25-30 min")
+                            elif "Lake View" in hood['name']:
+                                st.write("- Downtown: 20-25 min")
+                                st.write("- O'Hare Airport: 50-55 min")
+                                st.write("- River North: 15-20 min")
+                            else:
+                                st.write("Estimated commute times")
 
     # Add feedback section at the very end
     st.divider()
