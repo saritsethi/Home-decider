@@ -72,6 +72,42 @@ def display_report_results():
         create_navigation()
         st.title("Your Personalized Home Recommendations")
         
+        # Financial Recommendation Section
+        st.header('💡 Financial Recommendation')
+        recommendation = st.session_state.report_data['rent_vs_buy_recommendation'].upper()
+        st.info(f'Based on your financial profile, we recommend you {recommendation}.')
+
+        # Key Financial Metrics
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric(
+                'Maximum Home Price',
+                f'${st.session_state.report_data["max_home_price"]:,.2f}',
+                help='Based on your income and savings'
+            )
+        with col2:
+            st.metric(
+                'Down Payment Available',
+                f'${st.session_state.financial_info["down_payment"]:,.2f}',
+                help='From your provided financial information'
+            )
+        with col3:
+            monthly_income = st.session_state.financial_info['annual_income'] / 12
+            st.metric(
+                'Monthly Income',
+                f'${monthly_income:,.2f}',
+                help='Your monthly household income'
+            )
+
+        # Narrative Summary
+        st.header('📝 Analysis Summary')
+        for match in st.session_state.report_data['recommended_neighborhoods']:
+            st.subheader(f'{match["neighborhood"]["name"]} - {match["match_score"]}% Match')
+            st.write('Why this neighborhood?')
+            for reason in match['reasons']:
+                st.markdown(f'• {reason}')
+            st.divider()
+        
         # Generate PDF report
         pdf_path = create_pdf_report(
             st.session_state.report_data,
