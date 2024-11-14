@@ -91,6 +91,48 @@ def display_report_results():
             unsafe_allow_html=True
         )
 
+        # Financial Analysis Section
+        st.divider()
+        st.header("💰 Financial Analysis")
+
+        # Display rent vs buy recommendation
+        st.subheader("Rent vs Buy Recommendation")
+        recommendation = st.session_state.report_data['rent_vs_buy_recommendation'].upper()
+        st.info(f"Based on your financial profile, we recommend you {recommendation}.")
+
+        # Display financial metrics
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Maximum Home Price", f"${st.session_state.report_data['max_home_price']:,.2f}")
+        with col2:
+            st.metric("Annual Income", f"${st.session_state.financial_info['annual_income']:,.2f}")
+        with col3:
+            st.metric("Total Savings", f"${st.session_state.financial_info['savings']:,.2f}")
+
+        # Neighborhood Comparison Section
+        st.divider()
+        st.header("🏘️ Neighborhood Analysis")
+
+        # Display recommended neighborhoods
+        if 'recommended_neighborhoods' in st.session_state.report_data:
+            for match in st.session_state.report_data['recommended_neighborhoods']:
+                hood = match['neighborhood']
+                with st.expander(f"{hood['name']} - {match['match_score']}% Match", expanded=True):
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.metric("School Rating", f"{hood['school_rating']}/10")
+                        st.metric("Transport Score", f"{hood['transport_score']}/10")
+                    
+                    with col2:
+                        st.metric("Walkability", f"{hood['walkability_score']}/10")
+                        st.metric("Cost of Living", f"{hood['cost_of_living']}/10")
+                    
+                    if match.get('reasons'):
+                        st.subheader("Why This Neighborhood?")
+                        for reason in match['reasons']:
+                            st.write(f"• {reason}")
+
         # What's Next section with optimized tabs
         st.divider()
         st.header("👉 What Would You Like to Do Next?")
