@@ -1,24 +1,37 @@
 import os
 import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
+from psycopg2 import pool
 import json
 from datetime import datetime, timedelta
 import random
 import streamlit as st
 
+# Create a connection pool
 @st.cache_resource
-def get_db_connection():
+def get_connection_pool():
     try:
-        conn = psycopg2.connect(
+        connection_pool = pool.SimpleConnectionPool(
+            1, 20,  # min, max connections
             user=os.environ['PGUSER'],
             password=os.environ['PGPASSWORD'],
             host=os.environ['PGHOST'],
             port=os.environ['PGPORT'],
             database=os.environ['PGDATABASE']
         )
-        return conn
+        return connection_pool
     except Exception as e:
-        st.error(f"Database connection error: Unable to connect to database")
+        st.error(f"Failed to create connection pool: {str(e)}")
+        raise e
+
+# Update get_db_connection to use pool
+@st.cache_resource
+def get_db_connection():
+    try:
+        pool = get_connection_pool()
+        return pool.getconn()
+    except Exception as e:
+        st.error(f"Database connection error: {str(e)}")
         raise e
 
 @st.cache_data(ttl=3600)
@@ -41,9 +54,11 @@ def generate_historical_values(base_price):
     return json.dumps(values)
 
 def init_database():
+    pool = get_connection_pool()
     conn = None
+    cur = None
     try:
-        conn = get_db_connection()
+        conn = pool.getconn()
         conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
         cur = conn.cursor()
         
@@ -57,14 +72,15 @@ def init_database():
             )
             """
         )
-        cur.close()
         return True
     except Exception as e:
         st.error(f"Database initialization error: {str(e)}")
         return False
     finally:
-        if conn and not conn.closed:
-            conn.close()
+        if cur:
+            cur.close()
+        if conn:
+            pool.putconn(conn)
 
 @st.cache_data(ttl=3600)
 def get_available_states():
@@ -150,14 +166,13 @@ def get_neighborhood_data(city=None, state=None):
     return neighborhoods.get(city, [])
 
 def save_quiz_results(session_id, preferences, user_info):
-    """Save quiz results to database."""
+    pool = get_connection_pool()
     conn = None
+    cur = None
     try:
-        conn = get_db_connection()
-        if conn.closed:
-            conn = get_db_connection()  # Retry connection if closed
-            
+        conn = pool.getconn()
         cur = conn.cursor()
+        
         cur.execute(
             """
             INSERT INTO quiz_results (session_id, preferences, user_info)
@@ -169,10 +184,14 @@ def save_quiz_results(session_id, preferences, user_info):
             (session_id, preferences, user_info)
         )
         conn.commit()
-        cur.close()
+        return True
     except Exception as e:
+        if conn:
+            conn.rollback()
         st.error(f"Error saving quiz results: {str(e)}")
         raise e
     finally:
-        if conn and not conn.closed:
-            conn.close()
+        if cur:
+            cur.close()
+        if conn:
+            pool.putconn(conn)  # Return connection to pool
