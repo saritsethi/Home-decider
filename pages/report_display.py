@@ -8,7 +8,7 @@ import pandas as pd
 import base64
 import os
 
-st.set_page_config(page_title="Report Results", page_icon="📊")
+st.set_page_config(page_title="Report Results", page_icon="📊", layout="wide")
 
 # Optimized CSS
 st.markdown('''
@@ -19,14 +19,6 @@ st.markdown('''
         .stTab { width: 100%; }
         [data-testid="stHorizontalBlock"] { width: 100%; gap: 2rem; }
         .stMarkdown { width: 100% !important; }
-        
-        /* Grid layout */
-        .daily-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            margin: 20px 0;
-        }
         
         /* Card styles */
         .section-card {
@@ -62,14 +54,28 @@ def calculate_mortgage_prequalification(annual_income, monthly_debts, down_payme
     
     return max_home_price, max_monthly_payment
 
-def display_report_results():
+def initialize_session_state():
+    """Initialize session state with default values if not present."""
     if 'report_data' not in st.session_state:
+        st.session_state.report_data = None
+    if 'financial_info' not in st.session_state:
+        st.session_state.financial_info = {}
+    if 'preferences' not in st.session_state:
+        st.session_state.preferences = {}
+
+def display_report_results():
+    # Initialize session state
+    initialize_session_state()
+    
+    # Create navigation
+    create_navigation()
+    
+    if not st.session_state.report_data:
         st.warning("Please complete the lifestyle quiz first!")
         st.page_link("pages/lifestyle_quiz.py", label="Take the Quiz", icon="✨")
         return
 
     with st.spinner('Loading report...'):
-        create_navigation()
         st.title("Your Personalized Home Recommendations")
         
         # Generate PDF report
@@ -89,7 +95,6 @@ def display_report_results():
         st.divider()
         st.header("👉 What Would You Like to Do Next?")
         
-        # Use two tabs instead of three as per manager's request
         tab_mortgage, tab_listings = st.tabs(["💰 Mortgage Calculator", "🏠 Property Listings"])
         
         with tab_mortgage:
@@ -140,27 +145,33 @@ def display_report_results():
         with tab_listings:
             with st.spinner('Loading property listings...'):
                 st.subheader("Available Properties")
-                for match in st.session_state.report_data['recommended_neighborhoods']:
-                    hood = match['neighborhood']
-                    listings = hood.get('property_listings', [])
-                    if isinstance(listings, str):
-                        listings = json.loads(listings)
-                    
-                    if listings:
-                        st.subheader(f"Properties in {hood['name']}")
-                        for listing in listings:
-                            with st.expander(f"${listing['price']:,} - {listing['bedrooms']}bd/{listing['bathrooms']}ba", expanded=True):
-                                col1, col2 = st.columns(2)
-                                with col1:
-                                    st.metric("Square Feet", f"{listing['sqft']:,}")
-                                    st.metric("Year Built", listing['year_built'])
-                                with col2:
-                                    st.metric("Price/sqft", f"${listing['price']/listing['sqft']:,.2f}")
-                                st.write(listing['description'])
+                if 'recommended_neighborhoods' in st.session_state.report_data:
+                    for match in st.session_state.report_data['recommended_neighborhoods']:
+                        hood = match['neighborhood']
+                        listings = hood.get('property_listings', [])
+                        if isinstance(listings, str):
+                            try:
+                                listings = json.loads(listings)
+                            except json.JSONDecodeError:
+                                listings = []
+                        
+                        if listings:
+                            st.subheader(f"Properties in {hood['name']}")
+                            for listing in listings:
+                                with st.expander(f"${listing['price']:,} - {listing['bedrooms']}bd/{listing['bathrooms']}ba", expanded=True):
+                                    col1, col2 = st.columns(2)
+                                    with col1:
+                                        st.metric("Square Feet", f"{listing['sqft']:,}")
+                                        st.metric("Year Built", listing['year_built'])
+                                    with col2:
+                                        st.metric("Price/sqft", f"${listing['price']/listing['sqft']:,.2f}")
+                                    st.write(listing['description'])
+                else:
+                    st.warning("No neighborhood recommendations available. Please complete the lifestyle quiz.")
 
-    # Clean up the temporary PDF file
-    if os.path.exists(pdf_path):
-        os.remove(pdf_path)
+        # Clean up the temporary PDF file
+        if os.path.exists(pdf_path):
+            os.remove(pdf_path)
 
 if __name__ == "__main__":
     display_report_results()
