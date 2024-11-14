@@ -62,9 +62,13 @@ def init_database():
         conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
         cur = conn.cursor()
         
+        # Drop existing table if it exists
+        cur.execute("DROP TABLE IF EXISTS quiz_results")
+        
+        # Create table with correct schema
         cur.execute(
             """
-            CREATE TABLE IF NOT EXISTS quiz_results (
+            CREATE TABLE quiz_results (
                 session_id TEXT PRIMARY KEY,
                 preferences JSONB,
                 user_info JSONB,
