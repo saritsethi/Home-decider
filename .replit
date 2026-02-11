@@ -28,8 +28,9 @@ args = "streamlit run main.py"
 waitForPort = 5000
 
 [deployment]
-deploymentTarget = "static"
+deploymentTarget = "autoscale"
 publicDir = "dist"
+run = ["streamlit", "run", "--server.address", "0.0.0.0", "--server.port", "5000", "--server.headless", "true", "--server.enableCORS=false", "--server.enableWebsocketCompression=false", "main.py"]
 
 [[ports]]
 localPort = 5000
