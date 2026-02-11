@@ -19,48 +19,45 @@ def calculate_monthly_ownership_costs(home_price):
         'total': monthly_property_tax + monthly_hoa + monthly_insurance + monthly_maintenance
     }
 
-def calculate_rent_vs_buy(home_price, down_payment, interest_rate, loan_term, monthly_rent):
-    # Calculate mortgage payment
+def calculate_rent_vs_buy(home_price, down_payment, interest_rate, loan_term, monthly_rent,
+                          property_tax_rate=1.2, maintenance_cost_percent=1.0,
+                          home_appreciation_rate=3.0, rent_increase_rate=2.0,
+                          investment_return_rate=7.0):
     loan_amount = home_price - down_payment
     monthly_rate = interest_rate / 12 / 100
     n_payments = loan_term * 12
     monthly_mortgage = loan_amount * (monthly_rate * (1 + monthly_rate)**n_payments) / ((1 + monthly_rate)**n_payments - 1)
-    
-    # Get additional ownership costs
-    ownership_costs = calculate_monthly_ownership_costs(home_price)
-    total_monthly_ownership = monthly_mortgage + ownership_costs['total']
-    
-    # Calculate 5-year comparison
+
+    monthly_property_tax = (home_price * property_tax_rate / 100) / 12
+    monthly_insurance = 100
+    monthly_hoa = 500
+    monthly_maintenance = (home_price * maintenance_cost_percent / 100) / 12
+
     months = 60
-    buying_costs = []
-    renting_costs = []
-    rent_amounts = []
-    
-    # Assume 3% annual rent increase
-    for month in range(months):
-        rent_increase = (1 + 0.03)**(month/12)
+    month_list = []
+    cumulative_buying = []
+    cumulative_renting = []
+    total_buy = 0
+    total_rent = 0
+
+    for month in range(1, months + 1):
+        buy_cost = monthly_mortgage + monthly_property_tax + monthly_insurance + monthly_hoa + monthly_maintenance
+        total_buy += buy_cost
+
+        rent_increase = (1 + rent_increase_rate / 100) ** ((month - 1) / 12)
         current_rent = monthly_rent * rent_increase
-        rent_amounts.append(current_rent)
-        
-        # Accumulate costs
-        renting_costs.append(current_rent)
-        buying_costs.append(total_monthly_ownership)
-    
-    # Calculate cumulative costs
-    cumulative_buying = sum(buying_costs)
-    cumulative_renting = sum(rent_amounts)
-    
-    # Find break-even rent
-    break_even_rent = total_monthly_ownership
-    
-    return {
-        'monthly_mortgage': monthly_mortgage,
-        'monthly_ownership_costs': ownership_costs,
-        'total_monthly_ownership': total_monthly_ownership,
-        'five_year_buying_cost': cumulative_buying,
-        'five_year_renting_cost': cumulative_renting,
-        'break_even_rent': break_even_rent
-    }
+        total_rent += current_rent
+
+        month_list.append(month)
+        cumulative_buying.append(total_buy)
+        cumulative_renting.append(total_rent)
+
+    df = pd.DataFrame({
+        'Month': month_list,
+        'Cumulative_Buying_Costs': cumulative_buying,
+        'Cumulative_Rental_Costs': cumulative_renting
+    })
+    return df
 
 def calculate_mortgage_payment(principal, annual_rate, years):
     """Calculate monthly mortgage payment."""

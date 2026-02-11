@@ -3,7 +3,7 @@ import pandas as pd
 from components.navigation import create_navigation
 from components.inputs import create_neighborhood_inputs
 from utils.database import get_neighborhood_data
-from utils.visualization import create_neighborhood_comparison_chart
+from utils.visualization import create_neighborhood_comparison_chart, create_historical_value_chart
 
 st.set_page_config(page_title="Neighborhood Comparison", page_icon="🏘️")
 
@@ -23,11 +23,9 @@ def display_comparison_results(state, city, selected_neighborhoods):
     ]
     
     if selected_data:
-        # Create visualization
         fig = create_neighborhood_comparison_chart(selected_data)
         st.plotly_chart(fig, use_container_width=True)
         
-        # Detailed metrics table
         st.subheader("Detailed Metrics")
         metrics_df = pd.DataFrame(selected_data)
         st.dataframe(
@@ -35,6 +33,11 @@ def display_comparison_results(state, city, selected_neighborhoods):
                        'transport_score', 'walkability_score']],
             hide_index=True
         )
+        
+        hist_fig = create_historical_value_chart(selected_data)
+        if hist_fig:
+            st.subheader("Historical Property Values")
+            st.plotly_chart(hist_fig, use_container_width=True)
     else:
         st.warning("No data available for the selected neighborhoods.")
 

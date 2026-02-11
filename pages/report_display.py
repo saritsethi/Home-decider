@@ -1,9 +1,8 @@
 import streamlit as st
 from components.navigation import create_navigation
 import json
-from utils.visualization import create_neighborhood_comparison_chart
+from utils.visualization import create_neighborhood_comparison_chart, create_historical_value_chart
 from utils.report_generator import create_pdf_report
-from utils.financial_calculations import calculate_rent_vs_buy
 import pandas as pd
 import base64
 import os
@@ -132,6 +131,12 @@ def display_report_results():
                         st.subheader("Why This Neighborhood?")
                         for reason in match['reasons']:
                             st.write(f"• {reason}")
+
+            all_hoods = [m['neighborhood'] for m in st.session_state.report_data['recommended_neighborhoods']]
+            hist_fig = create_historical_value_chart(all_hoods)
+            if hist_fig:
+                st.subheader("Property Value Trends")
+                st.plotly_chart(hist_fig, use_container_width=True)
 
         # What's Next section with optimized tabs
         st.divider()
