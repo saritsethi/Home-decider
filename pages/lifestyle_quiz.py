@@ -4,7 +4,12 @@ import uuid
 from components.navigation import create_navigation
 from utils.database import get_available_states, get_available_cities, get_neighborhood_data, save_quiz_results
 from utils.report_generator import generate_integrated_report
-from utils.live_data import get_live_mortgage_rates, get_live_market_rent_with_fallback
+from utils.live_data import (
+    get_live_mortgage_rates,
+    get_live_market_rent_with_fallback,
+    build_dynamic_neighborhood,
+    STATE_MEDIAN_RENT,
+)
 
 st.set_page_config(page_title="Lifestyle Quiz", page_icon="✨")
 
@@ -97,28 +102,63 @@ def display_financial_info():
 
 
 def display_lifestyle_preferences():
-    states = get_available_states()
-    state = st.selectbox("Select State", states, key='state_selector_outer')
-    filtered_cities_outer = get_available_cities(state=state)
-    city_outer = st.selectbox("Select City (preview)", filtered_cities_outer, key='city_selector_outer')
+    # Location mode toggle
+    location_mode = st.radio(
+        "How would you like to specify your target location?",
+        ["Browse our curated city list", "Search any US city or neighborhood"],
+        horizontal=True,
+        key="location_mode"
+    )
 
-    rent_val, rent_source = get_live_market_rent_with_fallback(city_outer, state)
-    if rent_val:
-        st.info(f"📡 Estimated median 2BR rent in **{city_outer}**: **${rent_val:,.0f}/mo** ({rent_source})")
+    # Live rent preview (outside the form so it updates dynamically)
+    if location_mode == "Browse our curated city list":
+        states = get_available_states()
+        state_preview = st.selectbox("Select State", states, key='state_selector_outer')
+        filtered_cities_outer = get_available_cities(state=state_preview)
+        city_preview = st.selectbox("Select City (preview)", filtered_cities_outer, key='city_selector_outer')
+        rent_val, rent_source = get_live_market_rent_with_fallback(city_preview, state_preview)
+        if rent_val:
+            st.info(f"📡 Estimated median 2BR rent in **{city_preview}**: **${rent_val:,.0f}/mo** ({rent_source})")
+    else:
+        location_query = st.text_input(
+            "Enter any US city or neighborhood",
+            placeholder="e.g. South Congress, Austin TX  or  Astoria, Queens NY",
+            key="location_search_preview"
+        )
+        if location_query:
+            geo_state = None
+            for state_name in STATE_MEDIAN_RENT:
+                if state_name.lower() in location_query.lower():
+                    geo_state = state_name
+                    break
+            if geo_state:
+                est_rent = STATE_MEDIAN_RENT.get(geo_state, 1500)
+                st.info(f"📡 Estimated median 2BR rent in **{geo_state}**: **${est_rent:,}/mo** (state median estimate)")
+
+    st.divider()
 
     with st.form("neighborhood_preferences_form"):
-        st.subheader("Location Preferences")
+        st.subheader("Location")
 
-        states2 = get_available_states()
-        state = st.selectbox("Select State", states2, index=states2.index(state) if state in states2 else 0, key='state_selector')
-
-        if state and state != st.session_state.get('selected_state'):
-            st.session_state.selected_state = state
-            if 'selected_city' in st.session_state:
-                del st.session_state.selected_city
-
-        filtered_cities = get_available_cities(state=state)
-        city = st.selectbox("Select City", filtered_cities, key='city_selector')
+        if location_mode == "Browse our curated city list":
+            states2 = get_available_states()
+            state = st.selectbox(
+                "Select State", states2,
+                index=states2.index(state_preview) if state_preview in states2 else 0,
+                key='state_selector'
+            )
+            filtered_cities = get_available_cities(state=state)
+            city = st.selectbox("Select City", filtered_cities, key='city_selector')
+            custom_location = None
+        else:
+            state = None
+            city = None
+            custom_location = st.text_input(
+                "Target location",
+                placeholder="e.g. South Congress, Austin TX",
+                key="location_search_form",
+                help="Be specific — include the city and state for best results."
+            )
 
         st.subheader("Neighborhood Preferences")
         housing_type = st.select_slider(
@@ -144,6 +184,25 @@ def display_lifestyle_preferences():
                 **st.session_state.financial_info
             }
 
+            if location_mode == "Search any US city or neighborhood":
+                if not custom_location or not custom_location.strip():
+                    st.error("Please enter a location to search.")
+                    return
+                with st.spinner(f"Looking up {custom_location}…"):
+                    dynamic_hood = build_dynamic_neighborhood(custom_location.strip())
+                if not dynamic_hood:
+                    st.error(
+                        f"Could not find **{custom_location}**. "
+                        "Try a more specific query like \"Montrose, Houston TX\" or \"Capitol Hill, Denver CO\"."
+                    )
+                    return
+                state = dynamic_hood["state"]
+                city = dynamic_hood["city"]
+                matches = [dynamic_hood]
+                st.success(f"✅ Found: {dynamic_hood['neighborhood']}, {city}, {state}")
+            else:
+                matches = get_neighborhood_data(city=city, state=state)
+
             preferences = {
                 "state": state,
                 "city": city,
@@ -156,8 +215,6 @@ def display_lifestyle_preferences():
             }
 
             st.session_state.preferences = preferences
-
-            matches = get_neighborhood_data(city=city, state=state)
 
             st.session_state.report_data = generate_integrated_report(
                 preferences,
