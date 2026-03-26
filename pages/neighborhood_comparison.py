@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from components.navigation import create_navigation
-from components.inputs import create_neighborhood_inputs
+from components.inputs import create_neighborhood_inputs, location_picker_widget
 from utils.database import get_neighborhood_data
 from utils.visualization import create_neighborhood_comparison_chart, create_historical_value_chart
 from utils.live_data import (
@@ -9,7 +9,7 @@ from utils.live_data import (
     get_live_walk_scores_with_fallback,
     get_live_places_scores,
     live_data_status,
-    build_dynamic_neighborhood,
+    build_dynamic_neighborhood_from_geo,
     STATE_MEDIAN_HOME_PRICES,
 )
 
@@ -167,39 +167,48 @@ def _render_comparison(selected_data, live_sources_active):
 
 
 def search_tab():
-    """UI for searching any US location."""
+    """
+    UI for searching any US location using the 3-phase search-then-confirm picker.
+    Up to 3 location slots; at least 1 must be confirmed before comparing.
+    """
     st.markdown(
-        "Type any US neighborhood, city, or address — the app will geocode it and fetch "
-        "live scores from OpenStreetMap, Google Places, and FRED."
+        "Search any US neighborhood, city, or address. "
+        "We'll show you matching locations to pick from before fetching any data."
     )
 
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        q1 = st.text_input("Location 1", placeholder="e.g. South Congress, Austin TX")
-    with col2:
-        q2 = st.text_input("Location 2 (optional)", placeholder="e.g. Hyde Park, Chicago IL")
-    with col3:
-        q3 = st.text_input("Location 3 (optional)", placeholder="e.g. Capitol Hill, Seattle WA")
+    SLOTS = [
+        ("nc_loc_0", "Location 1",           "e.g. South Congress, Austin TX"),
+        ("nc_loc_1", "Location 2 (optional)", "e.g. Hyde Park, Chicago IL"),
+        ("nc_loc_2", "Location 3 (optional)", "e.g. Capitol Hill, Seattle WA"),
+    ]
 
-    queries = [q.strip() for q in [q1, q2, q3] if q.strip()]
+    confirmed_geos = []
+    for key, label, placeholder in SLOTS:
+        with st.container(border=True):
+            geo = location_picker_widget(key, label=label, placeholder=placeholder)
+            if geo:
+                confirmed_geos.append(geo)
 
-    if st.button("Search & Compare", type="primary", key="search_btn"):
-        if not queries:
-            st.warning("Please enter at least one location.")
-            return
+    st.write("")
 
+    if not confirmed_geos:
+        st.info("Confirm at least one location above to enable comparison.")
+        return
+
+    if st.button(
+        f"Compare {len(confirmed_geos)} Location{'s' if len(confirmed_geos) > 1 else ''}",
+        type="primary",
+        key="search_compare_btn",
+    ):
         neighborhoods = []
-        for q in queries:
-            with st.spinner(f"Looking up {q}…"):
-                hood = build_dynamic_neighborhood(q)
+        for geo in confirmed_geos:
+            label = geo.get("neighborhood", geo.get("display_name", ""))
+            with st.spinner(f"Fetching data for {label}…"):
+                hood = build_dynamic_neighborhood_from_geo(geo)
             if hood:
                 neighborhoods.append(hood)
-                st.success(f"✅ Found: **{hood['neighborhood']}**, {hood['city']}, {hood['state']}")
             else:
-                st.error(
-                    f"❌ Could not find **{q}**. Try adding the city/state, e.g. "
-                    f"\"Montrose, Houston TX\" or \"Capitol Hill, Denver CO\"."
-                )
+                st.error(f"Could not load data for **{label}**.")
 
         if neighborhoods:
             st.divider()
