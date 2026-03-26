@@ -43,3 +43,4 @@ expertMode = true
 
 [userenv.shared]
 FRED_API_KEY = "c43521ef5c3d8118b379aef02993f5ac"
+GOOGLE_PLACES_API_KEY = "AIzaSyBRuChsiCUkMY2SDCpI7zjKjc-Yu-Hs6Ek"
