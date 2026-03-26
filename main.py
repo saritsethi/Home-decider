@@ -155,6 +155,18 @@ try:
                 "pages/lifestyle_quiz.py"
             )
 
+        st.divider()
+        from utils.live_data import live_data_status, get_live_mortgage_rates
+        status = live_data_status()
+        active = [name for name, on in status.items() if on]
+
+        if active:
+            rates = get_live_mortgage_rates()
+            rate_str = f" · 30-yr rate: **{rates['rate_30yr']:.2f}%**" if rates else ""
+            st.success(f"📡 Live data active: {', '.join(active)}{rate_str}")
+        else:
+            st.caption("📊 Running on curated data. Add API keys to enable live mortgage rates, walk scores, and market rents.")
+
     if __name__ == "__main__":
         main()
         

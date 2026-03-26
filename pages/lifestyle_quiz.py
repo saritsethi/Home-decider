@@ -4,6 +4,7 @@ import uuid
 from components.navigation import create_navigation
 from utils.database import get_available_states, get_available_cities, get_neighborhood_data, save_quiz_results
 from utils.report_generator import generate_integrated_report
+from utils.live_data import get_live_mortgage_rates, get_live_market_rent
 
 st.set_page_config(page_title="Lifestyle Quiz", page_icon="✨")
 
@@ -42,6 +43,15 @@ def display_family_info():
 
 
 def display_financial_info():
+    live_rates = get_live_mortgage_rates()
+    default_rate = live_rates["rate_30yr"] if live_rates else 6.5
+
+    if live_rates:
+        st.info(
+            f"📡 **Live mortgage rate:** 30-yr fixed at **{live_rates['rate_30yr']:.2f}%** "
+            f"(Freddie Mac, as of {live_rates['as_of']}). Pre-filled below."
+        )
+
     with st.form("financial_details_form"):
         st.subheader("Financial Information")
 
@@ -62,8 +72,9 @@ def display_financial_info():
         target_home_price = st.number_input("Target Home Purchase Price ($)", min_value=0, value=400000, step=10000)
         down_payment_percent = st.slider("Down Payment Percentage", min_value=3, max_value=50, value=20)
         interest_rate = st.number_input(
-            "Expected Interest Rate (%)", min_value=0.0, max_value=15.0, value=6.5, step=0.1,
-            help="Current 30-year fixed rates are typically 6-8%"
+            "Expected Interest Rate (%)", min_value=0.0, max_value=15.0,
+            value=float(default_rate), step=0.1,
+            help="Pre-filled from live Freddie Mac data when FRED key is configured."
         )
 
         if st.form_submit_button("Next"):

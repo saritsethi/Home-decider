@@ -1,5 +1,6 @@
 import streamlit as st
 from components.navigation import create_navigation
+from utils.live_data import get_live_mortgage_rates
 
 st.set_page_config(page_title="Mortgage Pre-Qualification", page_icon="💰")
 
@@ -12,7 +13,6 @@ CREDIT_RATE_ADJUSTMENTS = {
 
 
 def calculate_max_mortgage(annual_income, monthly_debts, down_payment, interest_rate, loan_term_years):
-    """Calculate maximum mortgage amount based on income and debts."""
     monthly_income = annual_income / 12
     max_monthly_payment = (monthly_income * 0.43) - monthly_debts
     monthly_rate = interest_rate / 12 / 100
@@ -33,10 +33,24 @@ def main():
     create_navigation()
 
     st.title("Mortgage Pre-Qualification Calculator")
-    st.write("""
-    Find out how much home you might qualify for based on your income, debts, and other factors.
-    This calculator uses standard lending guidelines to estimate your maximum mortgage amount.
-    """)
+    st.write(
+        "Find out how much home you might qualify for based on your income, debts, and credit score. "
+        "Uses standard 43% debt-to-income lending guidelines."
+    )
+
+    live_rates = get_live_mortgage_rates()
+    if live_rates:
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Live 30-yr Fixed Rate", f"{live_rates['rate_30yr']:.2f}%")
+        with col2:
+            if "rate_15yr" in live_rates:
+                st.metric("Live 15-yr Fixed Rate", f"{live_rates['rate_15yr']:.2f}%")
+        with col3:
+            st.caption(f"📡 Source: FRED / Freddie Mac\nAs of {live_rates['as_of']}")
+        default_rate = live_rates["rate_30yr"]
+    else:
+        default_rate = 6.5
 
     with st.form("mortgage_qualification_form"):
         col1, col2 = st.columns(2)
@@ -48,7 +62,7 @@ def main():
             )
             monthly_debts = st.number_input(
                 "Monthly Debt Payments ($)", min_value=0, value=500, step=100,
-                help="Total monthly payments for car loans, credit cards, student loans, etc."
+                help="Car loans, credit cards, student loans, etc."
             )
             down_payment = st.number_input(
                 "Down Payment ($)", min_value=0, value=20000, step=1000,
@@ -57,17 +71,17 @@ def main():
 
         with col2:
             interest_rate = st.number_input(
-                "Interest Rate (%)", min_value=0.0, max_value=15.0, value=6.5, step=0.1,
-                help="Base mortgage interest rate before credit score adjustment"
+                "Interest Rate (%)", min_value=0.0, max_value=15.0,
+                value=float(default_rate), step=0.1,
+                help="Base rate before credit score adjustment. Live rate auto-filled from FRED when key is configured."
             )
             loan_term = st.selectbox(
-                "Loan Term (Years)", options=[15, 20, 30], index=2,
-                help="Length of the mortgage"
+                "Loan Term (Years)", options=[15, 20, 30], index=2
             )
             credit_score = st.selectbox(
                 "Credit Score Range",
                 options=list(CREDIT_RATE_ADJUSTMENTS.keys()),
-                help="Your credit score affects loan approval and interest rates"
+                help="Your credit score adjusts the interest rate numerically"
             )
 
         calculate_button = st.form_submit_button("Calculate Pre-Qualification")
@@ -98,52 +112,52 @@ def main():
 
         if rate_adjustment > 0:
             st.info(
-                f"Your base rate of {interest_rate:.1f}% has been adjusted to "
-                f"**{adjusted_rate:.1f}%** based on your credit score range. "
-                f"Improving your credit score could save you significantly over the life of the loan."
+                f"Your base rate of {interest_rate:.2f}% has been adjusted to "
+                f"**{adjusted_rate:.2f}%** based on your credit score. "
+                f"Improving your credit could save you significantly over the life of the loan."
             )
 
         col1, col2, col3 = st.columns(3)
-
         with col1:
-            st.metric("Maximum Home Price", f"${max_home_price:,.2f}",
-                      help="The maximum home price you might qualify for")
-
+            st.metric("Maximum Home Price", f"${max_home_price:,.0f}")
         with col2:
-            st.metric("Maximum Mortgage Amount", f"${max_mortgage:,.2f}",
-                      help="The maximum loan amount you might qualify for")
-
+            st.metric("Maximum Mortgage", f"${max_mortgage:,.0f}")
         with col3:
             monthly_rate_calc = adjusted_rate / 1200
             n = loan_term * 12
             if monthly_rate_calc > 0:
-                monthly_payment = (max_mortgage * monthly_rate_calc * (1 + monthly_rate_calc)**n) / ((1 + monthly_rate_calc)**n - 1)
+                monthly_payment = (max_mortgage * monthly_rate_calc * (1 + monthly_rate_calc)**n) / \
+                                  ((1 + monthly_rate_calc)**n - 1)
             else:
                 monthly_payment = max_mortgage / n
-            st.metric("Estimated Monthly Payment", f"${monthly_payment:,.2f}",
-                      help="Estimated principal and interest (excludes taxes and insurance)")
+            st.metric("Est. Monthly Payment", f"${monthly_payment:,.0f}")
 
-        st.subheader("Additional Considerations")
-        if credit_score == "Excellent (750+)":
-            st.success("With your excellent credit score, you qualify for the best interest rates and loan terms.")
-        elif credit_score == "Good (700-749)":
-            st.info("Your good credit score should qualify you for competitive rates, with a small premium over the best available.")
-        elif credit_score == "Fair (650-699)":
-            st.warning("A fair credit score adds a 0.75% rate premium. Improving your score before applying could save thousands.")
-        else:
-            st.error("A score below 650 adds a 1.5% rate premium and may limit loan options. Consider FHA loans or credit improvement strategies.")
-
-        st.subheader("Affordability Guidelines")
+        st.subheader("Affordability Ratios")
+        monthly_income = annual_income / 12
         housing_ratio = monthly_payment / monthly_income * 100
         dti_ratio = (monthly_payment + monthly_debts) / monthly_income * 100
 
         col1, col2 = st.columns(2)
         with col1:
+            color = "normal" if housing_ratio <= 28 else "inverse"
             st.metric("Housing Ratio", f"{housing_ratio:.1f}%",
-                      help="Monthly payment as % of income (lenders prefer under 28%)")
+                      "✓ Within 28% guideline" if housing_ratio <= 28 else "⚠ Above 28% guideline",
+                      delta_color=color)
         with col2:
+            color = "normal" if dti_ratio <= 43 else "inverse"
             st.metric("Debt-to-Income Ratio", f"{dti_ratio:.1f}%",
-                      help="Total debts as % of income (lenders require under 43%)")
+                      "✓ Within 43% limit" if dti_ratio <= 43 else "⚠ Above 43% limit",
+                      delta_color=color)
+
+        st.subheader("Credit Score Impact")
+        if credit_score == "Excellent (750+)":
+            st.success("Excellent credit — you qualify for the best available rates.")
+        elif credit_score == "Good (700-749)":
+            st.info(f"Good credit adds a 0.25% rate premium (+${(monthly_payment * 0.25 / 100 * n):,.0f} over the loan term).")
+        elif credit_score == "Fair (650-699)":
+            st.warning(f"Fair credit adds a 0.75% rate premium. Improving your score before applying could save thousands.")
+        else:
+            st.error("A score below 650 adds a 1.5% premium and may limit loan options. Consider FHA loans or credit improvement strategies.")
 
 
 if __name__ == "__main__":

@@ -1,13 +1,26 @@
 import streamlit as st
 from utils.database import get_available_states, get_available_cities, get_neighborhood_data
+from utils.live_data import get_live_mortgage_rates
 
 
 def create_financial_inputs():
-    """Create standardized financial input fields."""
+    """Create standardized financial input fields for the Rent vs Buy calculator."""
+    live_rates = get_live_mortgage_rates()
+    default_rate = live_rates["rate_30yr"] if live_rates else 6.5
+
+    if live_rates:
+        st.caption(
+            f"📡 Live 30-yr rate: **{live_rates['rate_30yr']:.2f}%** "
+            f"(Freddie Mac, as of {live_rates['as_of']}) — pre-filled below."
+        )
+
     with st.form("financial_inputs"):
         home_price = st.number_input("Home Purchase Price ($)", min_value=0, value=300000, step=1000)
         down_payment = st.number_input("Down Payment ($)", min_value=0, value=60000, step=1000)
-        interest_rate = st.number_input("Interest Rate (%)", min_value=0.0, value=6.5, step=0.1)
+        interest_rate = st.number_input(
+            "Interest Rate (%)", min_value=0.0, value=float(default_rate), step=0.1,
+            help="Pre-filled from live Freddie Mac data when FRED key is configured."
+        )
         monthly_rent = st.number_input("Monthly Rent ($)", min_value=0, value=2000, step=100)
 
         col1, col2 = st.columns(2)
@@ -45,7 +58,10 @@ def create_neighborhood_inputs():
     city = st.selectbox("Select City", cities)
 
     neighborhoods_data = get_neighborhood_data(city=city, state=state)
-    available_neighborhoods = [n['name'] for n in neighborhoods_data] if neighborhoods_data else ["No neighborhoods available"]
+    available_neighborhoods = (
+        [n["name"] for n in neighborhoods_data] if neighborhoods_data
+        else ["No neighborhoods available"]
+    )
 
     neighborhoods = st.multiselect(
         "Select Neighborhoods to Compare",
