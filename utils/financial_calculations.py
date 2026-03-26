@@ -1,23 +1,5 @@
-import numpy as np
 import pandas as pd
 
-def calculate_monthly_ownership_costs(home_price):
-    # Property tax (annual rate of 1.2% divided by 12)
-    monthly_property_tax = (home_price * 0.012) / 12
-    # HOA fees
-    monthly_hoa = 500
-    # Insurance
-    monthly_insurance = 100
-    # Maintenance (2% annual divided by 12)
-    monthly_maintenance = (home_price * 0.02) / 12
-    
-    return {
-        'property_tax': monthly_property_tax,
-        'hoa': monthly_hoa,
-        'insurance': monthly_insurance,
-        'maintenance': monthly_maintenance,
-        'total': monthly_property_tax + monthly_hoa + monthly_insurance + monthly_maintenance
-    }
 
 def calculate_rent_vs_buy(home_price, down_payment, interest_rate, loan_term, monthly_rent,
                           property_tax_rate=1.2, maintenance_cost_percent=1.0,
@@ -26,12 +8,17 @@ def calculate_rent_vs_buy(home_price, down_payment, interest_rate, loan_term, mo
     loan_amount = home_price - down_payment
     monthly_rate = interest_rate / 12 / 100
     n_payments = loan_term * 12
-    monthly_mortgage = loan_amount * (monthly_rate * (1 + monthly_rate)**n_payments) / ((1 + monthly_rate)**n_payments - 1)
+
+    if monthly_rate > 0:
+        monthly_mortgage = loan_amount * (monthly_rate * (1 + monthly_rate)**n_payments) / ((1 + monthly_rate)**n_payments - 1)
+    else:
+        monthly_mortgage = loan_amount / n_payments if n_payments > 0 else 0
 
     monthly_property_tax = (home_price * property_tax_rate / 100) / 12
-    monthly_insurance = 100
-    monthly_hoa = 500
+    monthly_insurance = (home_price * 0.001) / 12
     monthly_maintenance = (home_price * maintenance_cost_percent / 100) / 12
+
+    monthly_opportunity_cost = down_payment * ((1 + investment_return_rate / 100) ** (1 / 12) - 1)
 
     months = 60
     month_list = []
@@ -39,10 +26,16 @@ def calculate_rent_vs_buy(home_price, down_payment, interest_rate, loan_term, mo
     cumulative_renting = []
     total_buy = 0
     total_rent = 0
+    current_home_value = home_price
 
     for month in range(1, months + 1):
-        buy_cost = monthly_mortgage + monthly_property_tax + monthly_insurance + monthly_hoa + monthly_maintenance
-        total_buy += buy_cost
+        monthly_appreciation = current_home_value * ((1 + home_appreciation_rate / 100) ** (1 / 12) - 1)
+        current_home_value *= (1 + home_appreciation_rate / 100) ** (1 / 12)
+
+        gross_buy_cost = (monthly_mortgage + monthly_property_tax +
+                          monthly_insurance + monthly_maintenance + monthly_opportunity_cost)
+        net_buy_cost = gross_buy_cost - monthly_appreciation
+        total_buy += net_buy_cost
 
         rent_increase = (1 + rent_increase_rate / 100) ** ((month - 1) / 12)
         current_rent = monthly_rent * rent_increase
@@ -52,15 +45,8 @@ def calculate_rent_vs_buy(home_price, down_payment, interest_rate, loan_term, mo
         cumulative_buying.append(total_buy)
         cumulative_renting.append(total_rent)
 
-    df = pd.DataFrame({
+    return pd.DataFrame({
         'Month': month_list,
         'Cumulative_Buying_Costs': cumulative_buying,
         'Cumulative_Rental_Costs': cumulative_renting
     })
-    return df
-
-def calculate_mortgage_payment(principal, annual_rate, years):
-    """Calculate monthly mortgage payment."""
-    monthly_rate = annual_rate / 12 / 100
-    num_payments = years * 12
-    return principal * (monthly_rate * (1 + monthly_rate)**num_payments) / ((1 + monthly_rate)**num_payments - 1)

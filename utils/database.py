@@ -1,18 +1,18 @@
 import os
+import random
+import json
 import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 from psycopg2 import pool
-import json
 from datetime import datetime, timedelta
-import random
 import streamlit as st
 
-# Create a connection pool
+
 @st.cache_resource
 def get_connection_pool():
     try:
         connection_pool = pool.SimpleConnectionPool(
-            1, 20,  # min, max connections
+            1, 20,
             user=os.environ['PGUSER'],
             password=os.environ['PGPASSWORD'],
             host=os.environ['PGHOST'],
@@ -24,58 +24,43 @@ def get_connection_pool():
         st.error(f"Failed to create connection pool: {str(e)}")
         raise e
 
-# Update get_db_connection to use pool
-@st.cache_resource
-def get_db_connection():
-    try:
-        pool = get_connection_pool()
-        return pool.getconn()
-    except Exception as e:
-        st.error(f"Database connection error: {str(e)}")
-        raise e
 
 @st.cache_data(ttl=3600)
 def generate_historical_values(base_price):
-    """Generate cached historical property values."""
+    """Generate deterministic historical property values seeded by base price."""
+    rng = random.Random(int(base_price))
     values = []
-    date = datetime.now() - timedelta(days=5*365)
-    price = base_price * 0.75  # Start 25% lower than current
-    
-    for _ in range(20):  # Quarterly for 5 years
+    date = datetime.now() - timedelta(days=5 * 365)
+    price = base_price * 0.75
+
+    for _ in range(20):
         values.append({
             "date": date.strftime("%Y-%m-%d"),
             "value": round(price, 2)
         })
         date += timedelta(days=90)
-        # Add some variability to price growth
-        growth_rate = 1.02 + (random.random() - 0.5) * 0.01
+        growth_rate = 1.02 + (rng.random() - 0.5) * 0.01
         price *= growth_rate
-    
+
     return json.dumps(values)
 
+
 def init_database():
-    pool = get_connection_pool()
+    db_pool = get_connection_pool()
     conn = None
     cur = None
     try:
-        conn = pool.getconn()
+        conn = db_pool.getconn()
         conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
         cur = conn.cursor()
-        
-        # Drop existing table if it exists
-        cur.execute("DROP TABLE IF EXISTS quiz_results")
-        
-        # Create table with correct schema
-        cur.execute(
-            """
-            CREATE TABLE quiz_results (
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS quiz_results (
                 session_id TEXT PRIMARY KEY,
                 preferences JSONB,
                 user_info JSONB,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-            """
-        )
+        """)
         return True
     except Exception as e:
         st.error(f"Database initialization error: {str(e)}")
@@ -84,16 +69,16 @@ def init_database():
         if cur:
             cur.close()
         if conn:
-            pool.putconn(conn)
+            db_pool.putconn(conn)
+
 
 @st.cache_data(ttl=3600)
 def get_available_states():
-    """Get list of available states."""
     return ["Illinois", "New York", "California"]
+
 
 @st.cache_data(ttl=3600)
 def get_available_cities(state=None):
-    """Get list of available cities for a state."""
     cities = {
         "Illinois": ["Chicago", "Evanston", "Oak Park"],
         "New York": ["New York City", "Brooklyn", "Queens"],
@@ -101,47 +86,44 @@ def get_available_cities(state=None):
     }
     return cities.get(state, []) if state else []
 
+
 @st.cache_data(ttl=3600)
 def get_neighborhood_data(city=None, state=None):
-    """Get neighborhood data for a city."""
     if not city:
         return []
-        
+
     neighborhoods = {
         "Chicago": [
             {
                 "name": "Lincoln Park",
-                "cost_of_living": 8,
-                "school_rating": 9,
-                "transport_score": 8,
-                "walkability_score": 9,
+                "cost_of_living": 8, "school_rating": 9, "transport_score": 8, "walkability_score": 9,
+                "safety_score": 8, "nightlife_score": 8, "dining_score": 9, "outdoor_score": 8,
+                "quiet_score": 3, "shopping_score": 7,
                 "historical_values": generate_historical_values(500000),
                 "property_listings": [
-                    {"address": "2143 N Sheffield Ave", "price": 849000, "bedrooms": 3, "bathrooms": 2.5, "sqft": 2100, "year_built": 2019, "description": "Stunning contemporary townhome featuring hardwood floors throughout, gourmet kitchen with stainless steel appliances, spacious primary suite, attached garage, and private rooftop deck."},
-                    {"address": "1920 N Lincoln Park West", "price": 1249000, "bedrooms": 4, "bathrooms": 3, "sqft": 2800, "year_built": 2015, "description": "Elegant corner unit with unobstructed park views, chef's kitchen with high-end appliances, marble bathrooms, custom closets, and 24-hour doorman."}
+                    {"address": "2143 N Sheffield Ave", "price": 849000, "bedrooms": 3, "bathrooms": 2.5, "sqft": 2100, "year_built": 2019, "description": "Stunning contemporary townhome with hardwood floors, gourmet kitchen, spacious primary suite, attached garage, and private rooftop deck."},
+                    {"address": "1920 N Lincoln Park West", "price": 1249000, "bedrooms": 4, "bathrooms": 3, "sqft": 2800, "year_built": 2015, "description": "Elegant corner unit with unobstructed park views, chef's kitchen, marble bathrooms, custom closets, and 24-hour doorman."}
                 ]
             },
             {
                 "name": "Lake View",
-                "cost_of_living": 7,
-                "school_rating": 8,
-                "transport_score": 9,
-                "walkability_score": 8,
+                "cost_of_living": 7, "school_rating": 8, "transport_score": 9, "walkability_score": 8,
+                "safety_score": 7, "nightlife_score": 9, "dining_score": 8, "outdoor_score": 6,
+                "quiet_score": 3, "shopping_score": 7,
                 "historical_values": generate_historical_values(450000),
                 "property_listings": [
-                    {"address": "3550 N Lake Shore Dr", "price": 899000, "bedrooms": 3, "bathrooms": 2.5, "sqft": 1900, "year_built": 2017, "description": "Luxury high-rise unit with breathtaking lake views, custom kitchen cabinets, quartz countertops, spa-like bathrooms, and fitness center."},
-                    {"address": "1658 W Addison St", "price": 679000, "bedrooms": 3, "bathrooms": 2, "sqft": 1650, "year_built": 2012, "description": "Sun-filled corner unit near Wrigley Field, open concept living area, renovated kitchen, hardwood floors, and private outdoor space."}
+                    {"address": "3550 N Lake Shore Dr", "price": 899000, "bedrooms": 3, "bathrooms": 2.5, "sqft": 1900, "year_built": 2017, "description": "Luxury high-rise with breathtaking lake views, custom kitchen, quartz countertops, spa-like bathrooms, and fitness center."},
+                    {"address": "1658 W Addison St", "price": 679000, "bedrooms": 3, "bathrooms": 2, "sqft": 1650, "year_built": 2012, "description": "Sun-filled corner unit near Wrigley Field, open concept living, renovated kitchen, hardwood floors, and private outdoor space."}
                 ]
             },
             {
                 "name": "Wicker Park",
-                "cost_of_living": 7,
-                "school_rating": 7,
-                "transport_score": 8,
-                "walkability_score": 9,
+                "cost_of_living": 7, "school_rating": 7, "transport_score": 8, "walkability_score": 9,
+                "safety_score": 6, "nightlife_score": 9, "dining_score": 9, "outdoor_score": 5,
+                "quiet_score": 3, "shopping_score": 8,
                 "historical_values": generate_historical_values(420000),
                 "property_listings": [
-                    {"address": "1540 N Damen Ave", "price": 599000, "bedrooms": 2, "bathrooms": 2, "sqft": 1400, "year_built": 2018, "description": "Modern condo in the heart of Wicker Park with rooftop deck, in-unit laundry, and steps from the best restaurants and boutiques."},
+                    {"address": "1540 N Damen Ave", "price": 599000, "bedrooms": 2, "bathrooms": 2, "sqft": 1400, "year_built": 2018, "description": "Modern condo in the heart of Wicker Park with rooftop deck, in-unit laundry, and steps from top restaurants."},
                     {"address": "2020 W Pierce Ave", "price": 725000, "bedrooms": 3, "bathrooms": 2.5, "sqft": 1850, "year_built": 2020, "description": "New construction townhome with open floor plan, designer finishes, private garage, and landscaped backyard."}
                 ]
             }
@@ -149,10 +131,9 @@ def get_neighborhood_data(city=None, state=None):
         "Evanston": [
             {
                 "name": "Downtown Evanston",
-                "cost_of_living": 7,
-                "school_rating": 9,
-                "transport_score": 8,
-                "walkability_score": 9,
+                "cost_of_living": 7, "school_rating": 9, "transport_score": 8, "walkability_score": 9,
+                "safety_score": 8, "nightlife_score": 5, "dining_score": 7, "outdoor_score": 6,
+                "quiet_score": 6, "shopping_score": 7,
                 "historical_values": generate_historical_values(400000),
                 "property_listings": [
                     {"address": "1570 Sherman Ave", "price": 425000, "bedrooms": 2, "bathrooms": 2, "sqft": 1200, "year_built": 2010, "description": "Bright condo near Northwestern University with lake views, updated kitchen, and walking distance to shops and transit."},
@@ -161,10 +142,9 @@ def get_neighborhood_data(city=None, state=None):
             },
             {
                 "name": "South Evanston",
-                "cost_of_living": 6,
-                "school_rating": 8,
-                "transport_score": 7,
-                "walkability_score": 7,
+                "cost_of_living": 6, "school_rating": 8, "transport_score": 7, "walkability_score": 7,
+                "safety_score": 8, "nightlife_score": 3, "dining_score": 5, "outdoor_score": 6,
+                "quiet_score": 8, "shopping_score": 5,
                 "historical_values": generate_historical_values(350000),
                 "property_listings": [
                     {"address": "2200 Main St", "price": 375000, "bedrooms": 3, "bathrooms": 1.5, "sqft": 1600, "year_built": 1995, "description": "Charming single-family home with large yard, updated bathrooms, and quiet tree-lined street."},
@@ -175,22 +155,20 @@ def get_neighborhood_data(city=None, state=None):
         "Oak Park": [
             {
                 "name": "Downtown Oak Park",
-                "cost_of_living": 7,
-                "school_rating": 8,
-                "transport_score": 8,
-                "walkability_score": 8,
+                "cost_of_living": 7, "school_rating": 8, "transport_score": 8, "walkability_score": 8,
+                "safety_score": 8, "nightlife_score": 4, "dining_score": 6, "outdoor_score": 6,
+                "quiet_score": 7, "shopping_score": 6,
                 "historical_values": generate_historical_values(380000),
                 "property_listings": [
                     {"address": "150 S Oak Park Ave", "price": 450000, "bedrooms": 3, "bathrooms": 2, "sqft": 1800, "year_built": 2000, "description": "Historic district home with original woodwork, updated kitchen, wrap-around porch, and easy CTA access."},
-                    {"address": "625 Lake St", "price": 389000, "bedrooms": 2, "bathrooms": 2, "sqft": 1350, "year_built": 2012, "description": "Modern condo with open layout, stainless appliances, balcony, and one block from Green Line station."}
+                    {"address": "625 Lake St", "price": 389000, "bedrooms": 2, "bathrooms": 2, "sqft": 1350, "year_built": 2012, "description": "Modern condo with open layout, stainless appliances, balcony, one block from Green Line station."}
                 ]
             },
             {
                 "name": "Frank Lloyd Wright District",
-                "cost_of_living": 8,
-                "school_rating": 9,
-                "transport_score": 7,
-                "walkability_score": 8,
+                "cost_of_living": 8, "school_rating": 9, "transport_score": 7, "walkability_score": 8,
+                "safety_score": 9, "nightlife_score": 3, "dining_score": 5, "outdoor_score": 7,
+                "quiet_score": 8, "shopping_score": 5,
                 "historical_values": generate_historical_values(450000),
                 "property_listings": [
                     {"address": "333 Forest Ave", "price": 725000, "bedrooms": 4, "bathrooms": 3, "sqft": 2600, "year_built": 1920, "description": "Beautifully preserved Prairie-style home with period details, chef's kitchen renovation, mature landscaping, and top-rated schools."},
@@ -201,22 +179,20 @@ def get_neighborhood_data(city=None, state=None):
         "New York City": [
             {
                 "name": "Upper West Side",
-                "cost_of_living": 9,
-                "school_rating": 9,
-                "transport_score": 10,
-                "walkability_score": 10,
+                "cost_of_living": 9, "school_rating": 9, "transport_score": 10, "walkability_score": 10,
+                "safety_score": 8, "nightlife_score": 7, "dining_score": 9, "outdoor_score": 8,
+                "quiet_score": 4, "shopping_score": 8,
                 "historical_values": generate_historical_values(950000),
                 "property_listings": [
                     {"address": "210 W 78th St", "price": 1450000, "bedrooms": 2, "bathrooms": 2, "sqft": 1200, "year_built": 2018, "description": "Pre-war charm meets modern luxury with Central Park views, doorman building, renovated kitchen, and washer/dryer in unit."},
-                    {"address": "350 W 85th St", "price": 899000, "bedrooms": 1, "bathrooms": 1, "sqft": 850, "year_built": 2005, "description": "Bright alcove studio-turned-one-bedroom with high ceilings, exposed brick, and steps from Riverside Park."}
+                    {"address": "350 W 85th St", "price": 899000, "bedrooms": 1, "bathrooms": 1, "sqft": 850, "year_built": 2005, "description": "Bright one-bedroom with high ceilings, exposed brick, and steps from Riverside Park."}
                 ]
             },
             {
                 "name": "Harlem",
-                "cost_of_living": 6,
-                "school_rating": 7,
-                "transport_score": 9,
-                "walkability_score": 8,
+                "cost_of_living": 6, "school_rating": 7, "transport_score": 9, "walkability_score": 8,
+                "safety_score": 6, "nightlife_score": 7, "dining_score": 7, "outdoor_score": 6,
+                "quiet_score": 5, "shopping_score": 6,
                 "historical_values": generate_historical_values(550000),
                 "property_listings": [
                     {"address": "280 W 135th St", "price": 650000, "bedrooms": 2, "bathrooms": 1.5, "sqft": 1100, "year_built": 2016, "description": "New development condo with chef's kitchen, private balcony, fitness center, and vibrant neighborhood culture."},
@@ -225,13 +201,12 @@ def get_neighborhood_data(city=None, state=None):
             },
             {
                 "name": "East Village",
-                "cost_of_living": 8,
-                "school_rating": 7,
-                "transport_score": 10,
-                "walkability_score": 10,
+                "cost_of_living": 8, "school_rating": 7, "transport_score": 10, "walkability_score": 10,
+                "safety_score": 7, "nightlife_score": 10, "dining_score": 10, "outdoor_score": 5,
+                "quiet_score": 2, "shopping_score": 8,
                 "historical_values": generate_historical_values(750000),
                 "property_listings": [
-                    {"address": "120 E 7th St", "price": 875000, "bedrooms": 2, "bathrooms": 1, "sqft": 950, "year_built": 2010, "description": "Renovated walkup with exposed brick, chef's kitchen, and surrounded by the best dining and nightlife in the city."},
+                    {"address": "120 E 7th St", "price": 875000, "bedrooms": 2, "bathrooms": 1, "sqft": 950, "year_built": 2010, "description": "Renovated walkup with exposed brick, chef's kitchen, surrounded by the best dining and nightlife in the city."},
                     {"address": "330 E 6th St", "price": 625000, "bedrooms": 1, "bathrooms": 1, "sqft": 650, "year_built": 2000, "description": "Cozy one-bedroom with high ceilings, original details, and Tompkins Square Park at your doorstep."}
                 ]
             }
@@ -239,10 +214,9 @@ def get_neighborhood_data(city=None, state=None):
         "Brooklyn": [
             {
                 "name": "Park Slope",
-                "cost_of_living": 8,
-                "school_rating": 9,
-                "transport_score": 9,
-                "walkability_score": 9,
+                "cost_of_living": 8, "school_rating": 9, "transport_score": 9, "walkability_score": 9,
+                "safety_score": 8, "nightlife_score": 6, "dining_score": 8, "outdoor_score": 8,
+                "quiet_score": 5, "shopping_score": 7,
                 "historical_values": generate_historical_values(850000),
                 "property_listings": [
                     {"address": "450 5th Ave", "price": 1100000, "bedrooms": 3, "bathrooms": 2, "sqft": 1600, "year_built": 2015, "description": "Stunning brownstone floor-through with original moldings, chef's kitchen, private garden, and steps from Prospect Park."},
@@ -251,22 +225,20 @@ def get_neighborhood_data(city=None, state=None):
             },
             {
                 "name": "Williamsburg",
-                "cost_of_living": 8,
-                "school_rating": 7,
-                "transport_score": 8,
-                "walkability_score": 9,
+                "cost_of_living": 8, "school_rating": 7, "transport_score": 8, "walkability_score": 9,
+                "safety_score": 7, "nightlife_score": 9, "dining_score": 9, "outdoor_score": 5,
+                "quiet_score": 3, "shopping_score": 8,
                 "historical_values": generate_historical_values(700000),
                 "property_listings": [
                     {"address": "100 N 3rd St", "price": 925000, "bedrooms": 2, "bathrooms": 2, "sqft": 1100, "year_built": 2019, "description": "Luxury waterfront condo with Manhattan skyline views, rooftop pool, concierge, and steps from the L train."},
-                    {"address": "250 Bedford Ave", "price": 675000, "bedrooms": 1, "bathrooms": 1, "sqft": 800, "year_built": 2017, "description": "Trendy loft-style apartment with soaring ceilings, oversized windows, and surrounded by galleries and restaurants."}
+                    {"address": "250 Bedford Ave", "price": 675000, "bedrooms": 1, "bathrooms": 1, "sqft": 800, "year_built": 2017, "description": "Trendy loft-style apartment with soaring ceilings, oversized windows, surrounded by galleries and restaurants."}
                 ]
             },
             {
                 "name": "DUMBO",
-                "cost_of_living": 9,
-                "school_rating": 8,
-                "transport_score": 8,
-                "walkability_score": 9,
+                "cost_of_living": 9, "school_rating": 8, "transport_score": 8, "walkability_score": 9,
+                "safety_score": 8, "nightlife_score": 6, "dining_score": 7, "outdoor_score": 7,
+                "quiet_score": 5, "shopping_score": 6,
                 "historical_values": generate_historical_values(900000),
                 "property_listings": [
                     {"address": "50 Main St", "price": 1350000, "bedrooms": 2, "bathrooms": 2, "sqft": 1300, "year_built": 2020, "description": "Converted warehouse loft with Brooklyn Bridge views, 12-foot ceilings, designer finishes, and doorman building."},
@@ -277,34 +249,31 @@ def get_neighborhood_data(city=None, state=None):
         "Queens": [
             {
                 "name": "Astoria",
-                "cost_of_living": 6,
-                "school_rating": 7,
-                "transport_score": 8,
-                "walkability_score": 8,
+                "cost_of_living": 6, "school_rating": 7, "transport_score": 8, "walkability_score": 8,
+                "safety_score": 7, "nightlife_score": 6, "dining_score": 8, "outdoor_score": 6,
+                "quiet_score": 5, "shopping_score": 6,
                 "historical_values": generate_historical_values(450000),
                 "property_listings": [
                     {"address": "25-10 30th Ave", "price": 525000, "bedrooms": 2, "bathrooms": 1, "sqft": 1000, "year_built": 2015, "description": "Bright corner condo with balcony, updated kitchen, diverse dining scene, and quick N/W train access to Manhattan."},
-                    {"address": "31-50 Steinway St", "price": 449000, "bedrooms": 1, "bathrooms": 1, "sqft": 750, "year_built": 2012, "description": "Modern one-bedroom near Astoria Park with rooftop access, in-unit laundry, and views of the East River."}
+                    {"address": "31-50 Steinway St", "price": 449000, "bedrooms": 1, "bathrooms": 1, "sqft": 750, "year_built": 2012, "description": "Modern one-bedroom near Astoria Park with rooftop access, in-unit laundry, and East River views."}
                 ]
             },
             {
                 "name": "Long Island City",
-                "cost_of_living": 7,
-                "school_rating": 7,
-                "transport_score": 9,
-                "walkability_score": 8,
+                "cost_of_living": 7, "school_rating": 7, "transport_score": 9, "walkability_score": 8,
+                "safety_score": 7, "nightlife_score": 5, "dining_score": 6, "outdoor_score": 6,
+                "quiet_score": 5, "shopping_score": 5,
                 "historical_values": generate_historical_values(600000),
                 "property_listings": [
-                    {"address": "5-25 46th Ave", "price": 750000, "bedrooms": 2, "bathrooms": 2, "sqft": 1100, "year_built": 2021, "description": "Brand new luxury tower with panoramic Manhattan views, resort-style amenities, and one stop from Midtown."},
+                    {"address": "5-25 46th Ave", "price": 750000, "bedrooms": 2, "bathrooms": 2, "sqft": 1100, "year_built": 2021, "description": "Brand new luxury tower with panoramic Manhattan views, resort-style amenities, one stop from Midtown."},
                     {"address": "10-50 Jackson Ave", "price": 595000, "bedrooms": 1, "bathrooms": 1, "sqft": 800, "year_built": 2019, "description": "Sleek modern condo near MoMA PS1 with floor-to-ceiling windows, chef's kitchen, and concierge service."}
                 ]
             },
             {
                 "name": "Forest Hills",
-                "cost_of_living": 6,
-                "school_rating": 8,
-                "transport_score": 7,
-                "walkability_score": 7,
+                "cost_of_living": 6, "school_rating": 8, "transport_score": 7, "walkability_score": 7,
+                "safety_score": 8, "nightlife_score": 4, "dining_score": 6, "outdoor_score": 6,
+                "quiet_score": 7, "shopping_score": 6,
                 "historical_values": generate_historical_values(500000),
                 "property_listings": [
                     {"address": "108-20 Queens Blvd", "price": 475000, "bedrooms": 2, "bathrooms": 1.5, "sqft": 1100, "year_built": 2000, "description": "Pre-war co-op with Art Deco details, doorman building, lush garden courtyard, and express train to Penn Station."},
@@ -315,10 +284,9 @@ def get_neighborhood_data(city=None, state=None):
         "San Francisco": [
             {
                 "name": "Pacific Heights",
-                "cost_of_living": 10,
-                "school_rating": 9,
-                "transport_score": 7,
-                "walkability_score": 8,
+                "cost_of_living": 10, "school_rating": 9, "transport_score": 7, "walkability_score": 8,
+                "safety_score": 8, "nightlife_score": 5, "dining_score": 7, "outdoor_score": 7,
+                "quiet_score": 6, "shopping_score": 7,
                 "historical_values": generate_historical_values(1200000),
                 "property_listings": [
                     {"address": "2450 Broadway St", "price": 1850000, "bedrooms": 3, "bathrooms": 2.5, "sqft": 2200, "year_built": 2015, "description": "Stunning Victorian with Golden Gate Bridge views, gourmet kitchen, private garden, and classic San Francisco charm."},
@@ -327,22 +295,20 @@ def get_neighborhood_data(city=None, state=None):
             },
             {
                 "name": "Mission District",
-                "cost_of_living": 7,
-                "school_rating": 6,
-                "transport_score": 9,
-                "walkability_score": 9,
+                "cost_of_living": 7, "school_rating": 6, "transport_score": 9, "walkability_score": 9,
+                "safety_score": 5, "nightlife_score": 8, "dining_score": 10, "outdoor_score": 5,
+                "quiet_score": 3, "shopping_score": 7,
                 "historical_values": generate_historical_values(800000),
                 "property_listings": [
                     {"address": "3200 24th St", "price": 895000, "bedrooms": 2, "bathrooms": 1, "sqft": 1100, "year_built": 2010, "description": "Vibrant neighborhood condo with BART access, sunny exposure, modern finishes, and world-class dining at your door."},
-                    {"address": "1450 Valencia St", "price": 749000, "bedrooms": 1, "bathrooms": 1, "sqft": 800, "year_built": 2016, "description": "Stylish one-bedroom with private patio, in-unit laundry, and surrounded by the best cafes and shops."}
+                    {"address": "1450 Valencia St", "price": 749000, "bedrooms": 1, "bathrooms": 1, "sqft": 800, "year_built": 2016, "description": "Stylish one-bedroom with private patio, in-unit laundry, surrounded by the best cafes and shops."}
                 ]
             },
             {
                 "name": "Sunset District",
-                "cost_of_living": 6,
-                "school_rating": 8,
-                "transport_score": 6,
-                "walkability_score": 6,
+                "cost_of_living": 6, "school_rating": 8, "transport_score": 6, "walkability_score": 6,
+                "safety_score": 8, "nightlife_score": 3, "dining_score": 5, "outdoor_score": 8,
+                "quiet_score": 8, "shopping_score": 5,
                 "historical_values": generate_historical_values(950000),
                 "property_listings": [
                     {"address": "1840 Judah St", "price": 1100000, "bedrooms": 3, "bathrooms": 2, "sqft": 1800, "year_built": 1960, "description": "Classic single-family home with ocean breezes, large backyard, updated kitchen, and close to Golden Gate Park."},
@@ -353,22 +319,20 @@ def get_neighborhood_data(city=None, state=None):
         "Los Angeles": [
             {
                 "name": "Silver Lake",
-                "cost_of_living": 7,
-                "school_rating": 7,
-                "transport_score": 5,
-                "walkability_score": 7,
+                "cost_of_living": 7, "school_rating": 7, "transport_score": 5, "walkability_score": 7,
+                "safety_score": 6, "nightlife_score": 7, "dining_score": 8, "outdoor_score": 7,
+                "quiet_score": 5, "shopping_score": 7,
                 "historical_values": generate_historical_values(850000),
                 "property_listings": [
-                    {"address": "2830 Sunset Blvd", "price": 975000, "bedrooms": 2, "bathrooms": 2, "sqft": 1400, "year_built": 2019, "description": "Mid-century modern home with hillside views, open floor plan, designer kitchen, and walking distance to the reservoir."},
-                    {"address": "1545 Hyperion Ave", "price": 799000, "bedrooms": 2, "bathrooms": 1.5, "sqft": 1200, "year_built": 2015, "description": "Stylish bungalow with private yard, updated interiors, and steps from Sunset Junction shops and restaurants."}
+                    {"address": "2830 Sunset Blvd", "price": 975000, "bedrooms": 2, "bathrooms": 2, "sqft": 1400, "year_built": 2019, "description": "Mid-century modern home with hillside views, open floor plan, designer kitchen, walking distance to the reservoir."},
+                    {"address": "1545 Hyperion Ave", "price": 799000, "bedrooms": 2, "bathrooms": 1.5, "sqft": 1200, "year_built": 2015, "description": "Stylish bungalow with private yard, updated interiors, steps from Sunset Junction shops and restaurants."}
                 ]
             },
             {
                 "name": "Santa Monica",
-                "cost_of_living": 9,
-                "school_rating": 9,
-                "transport_score": 7,
-                "walkability_score": 9,
+                "cost_of_living": 9, "school_rating": 9, "transport_score": 7, "walkability_score": 9,
+                "safety_score": 8, "nightlife_score": 6, "dining_score": 8, "outdoor_score": 9,
+                "quiet_score": 5, "shopping_score": 8,
                 "historical_values": generate_historical_values(1100000),
                 "property_listings": [
                     {"address": "1425 Ocean Ave", "price": 1650000, "bedrooms": 3, "bathrooms": 2.5, "sqft": 1900, "year_built": 2020, "description": "Ocean-view luxury condo with resort amenities, chef's kitchen, private balcony, and steps from the beach and pier."},
@@ -377,10 +341,9 @@ def get_neighborhood_data(city=None, state=None):
             },
             {
                 "name": "Eagle Rock",
-                "cost_of_living": 5,
-                "school_rating": 7,
-                "transport_score": 5,
-                "walkability_score": 6,
+                "cost_of_living": 5, "school_rating": 7, "transport_score": 5, "walkability_score": 6,
+                "safety_score": 7, "nightlife_score": 4, "dining_score": 6, "outdoor_score": 7,
+                "quiet_score": 7, "shopping_score": 5,
                 "historical_values": generate_historical_values(650000),
                 "property_listings": [
                     {"address": "4620 Eagle Rock Blvd", "price": 725000, "bedrooms": 3, "bathrooms": 2, "sqft": 1600, "year_built": 2000, "description": "Charming craftsman home with mountain views, updated kitchen, spacious backyard, and growing arts district."},
@@ -391,22 +354,20 @@ def get_neighborhood_data(city=None, state=None):
         "San Diego": [
             {
                 "name": "North Park",
-                "cost_of_living": 6,
-                "school_rating": 7,
-                "transport_score": 6,
-                "walkability_score": 8,
+                "cost_of_living": 6, "school_rating": 7, "transport_score": 6, "walkability_score": 8,
+                "safety_score": 7, "nightlife_score": 7, "dining_score": 8, "outdoor_score": 6,
+                "quiet_score": 5, "shopping_score": 6,
                 "historical_values": generate_historical_values(650000),
                 "property_listings": [
                     {"address": "3025 University Ave", "price": 699000, "bedrooms": 2, "bathrooms": 2, "sqft": 1200, "year_built": 2018, "description": "Modern condo in trendy North Park with craft brewery scene, farmers market, and walkable neighborhood vibe."},
-                    {"address": "4140 30th St", "price": 575000, "bedrooms": 1, "bathrooms": 1, "sqft": 850, "year_built": 2015, "description": "Charming one-bedroom with private patio, updated finishes, and surrounded by the best local restaurants."}
+                    {"address": "4140 30th St", "price": 575000, "bedrooms": 1, "bathrooms": 1, "sqft": 850, "year_built": 2015, "description": "Charming one-bedroom with private patio, updated finishes, surrounded by the best local restaurants."}
                 ]
             },
             {
                 "name": "La Jolla",
-                "cost_of_living": 9,
-                "school_rating": 10,
-                "transport_score": 5,
-                "walkability_score": 7,
+                "cost_of_living": 9, "school_rating": 10, "transport_score": 5, "walkability_score": 7,
+                "safety_score": 9, "nightlife_score": 4, "dining_score": 7, "outdoor_score": 9,
+                "quiet_score": 7, "shopping_score": 6,
                 "historical_values": generate_historical_values(1100000),
                 "property_listings": [
                     {"address": "7550 Eads Ave", "price": 1495000, "bedrooms": 3, "bathrooms": 2.5, "sqft": 2000, "year_built": 2016, "description": "Coastal luxury condo with ocean views, gourmet kitchen, spa-like bathrooms, and steps from La Jolla Cove."},
@@ -415,28 +376,27 @@ def get_neighborhood_data(city=None, state=None):
             },
             {
                 "name": "Hillcrest",
-                "cost_of_living": 6,
-                "school_rating": 7,
-                "transport_score": 7,
-                "walkability_score": 9,
+                "cost_of_living": 6, "school_rating": 7, "transport_score": 7, "walkability_score": 9,
+                "safety_score": 7, "nightlife_score": 7, "dining_score": 8, "outdoor_score": 6,
+                "quiet_score": 5, "shopping_score": 7,
                 "historical_values": generate_historical_values(550000),
                 "property_listings": [
                     {"address": "3780 Park Blvd", "price": 525000, "bedrooms": 2, "bathrooms": 1, "sqft": 950, "year_built": 2010, "description": "Vibrant urban living near Balboa Park with walkable dining, updated kitchen, and strong community feel."},
-                    {"address": "1450 University Ave", "price": 449000, "bedrooms": 1, "bathrooms": 1, "sqft": 700, "year_built": 2008, "description": "Cozy condo with balcony, modern appliances, and surrounded by shops, cafes, and the famous farmers market."}
+                    {"address": "1450 University Ave", "price": 449000, "bedrooms": 1, "bathrooms": 1, "sqft": 700, "year_built": 2008, "description": "Cozy condo with balcony, modern appliances, surrounded by shops, cafes, and the famous farmers market."}
                 ]
             }
         ]
     }
     return neighborhoods.get(city, [])
 
+
 def save_quiz_results(session_id, preferences, user_info):
-    pool = get_connection_pool()
+    db_pool = get_connection_pool()
     conn = None
     cur = None
     try:
-        conn = pool.getconn()
+        conn = db_pool.getconn()
         cur = conn.cursor()
-        
         cur.execute(
             """
             INSERT INTO quiz_results (session_id, preferences, user_info)
@@ -444,7 +404,7 @@ def save_quiz_results(session_id, preferences, user_info):
             ON CONFLICT (session_id) DO UPDATE
             SET preferences = EXCLUDED.preferences,
                 user_info = EXCLUDED.user_info
-            """, 
+            """,
             (session_id, preferences, user_info)
         )
         conn.commit()
@@ -458,4 +418,4 @@ def save_quiz_results(session_id, preferences, user_info):
         if cur:
             cur.close()
         if conn:
-            pool.putconn(conn)  # Return connection to pool
+            db_pool.putconn(conn)

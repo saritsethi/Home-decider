@@ -40,13 +40,13 @@ def create_neighborhood_comparison_chart(neighborhood_data):
     
     fig = go.Figure()
     
-    for hood in neighborhood_data[:3]:  # Only top 3
+    for hood in neighborhood_data[:3]:
         fig.add_trace(go.Scatterpolar(
             r=[
                 hood['walkability_score'],
-                hood.get('dining_score', hood['walkability_score'] * 0.8),  # Estimate if not available
+                hood.get('dining_score', round(hood['walkability_score'] * 0.8, 1)),
                 hood['transport_score'],
-                hood.get('safety_score', hood['school_rating'] * 0.9),  # Estimate if not available
+                hood.get('safety_score', round(hood['school_rating'] * 0.9, 1)),
                 hood['school_rating']
             ],
             theta=categories,
