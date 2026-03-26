@@ -38,3 +38,8 @@ externalPort = 80
 
 [agent]
 expertMode = true
+
+[userenv]
+
+[userenv.shared]
+FRED_API_KEY = "c43521ef5c3d8118b379aef02993f5ac"
