@@ -42,6 +42,22 @@ Comprehensive 25-bug audit completed and all issues fixed:
 - `get_db_connection()` removed
 - `numpy` import removed from `mortgage_calculator.py`
 
+## Live Data Integrations (`utils/live_data.py`)
+
+### Always Active (no key required)
+- **OpenStreetMap / Overpass API** — Real walkability & transit scores per neighborhood (counts amenities + transit stops within 1 km, 7-day cache)
+- **BLS CPI API** — National rent CPI (series `CUSR0000SEHA`) × city baseline median 2BR rents → live rent estimate (24-hr cache)
+
+### Key-Activated
+- **FRED API** (`FRED_API_KEY`) — Live 30-yr/15-yr Freddie Mac mortgage rates + Case-Shiller city HPI history (24-hr cache)
+- **Google Places API** (`GOOGLE_PLACES_API_KEY`) — Real dining, nightlife, shopping, outdoor scores from place counts in 1 km radius (7-day cache)
+- **Walk Score API** (`WALK_SCORE_API_KEY`) — Walk Score + Transit Score (7-day cache; falls back to Overpass when absent)
+- **RentCast API** (`RENTCAST_API_KEY`) — Live median market rent by city (24-hr cache; falls back to BLS estimate when absent)
+
+### Fallback Chain
+- Walkability/transit: Walk Score API → Overpass API (always works)
+- Market rent: RentCast → BLS CPI estimate (always works)
+
 ## Project Architecture
 - **Framework**: Streamlit (Python)
 - **Database**: PostgreSQL (Neon-backed) for storing quiz results

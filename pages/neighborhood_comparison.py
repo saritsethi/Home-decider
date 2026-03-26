@@ -6,7 +6,7 @@ from utils.database import get_neighborhood_data
 from utils.visualization import create_neighborhood_comparison_chart, create_historical_value_chart
 from utils.live_data import (
     get_live_price_history,
-    get_live_walk_scores,
+    get_live_walk_scores_with_fallback,
     get_live_places_scores,
     live_data_status,
 )
@@ -48,7 +48,7 @@ def display_comparison_results(state, city, selected_neighborhoods):
             hood["historical_values"] = live_history
             live_sources_active.add("FRED Case-Shiller (price history)")
 
-        walk = get_live_walk_scores(name)
+        walk = get_live_walk_scores_with_fallback(name)
         if walk:
             if walk.get("walkability") is not None:
                 hood["walkability_score"] = walk["walkability"]
@@ -56,7 +56,8 @@ def display_comparison_results(state, city, selected_neighborhoods):
                 hood["transport_score"] = walk["transit"]
             if walk.get("description"):
                 hood["_walk_description"] = walk["description"]
-            live_sources_active.add("Walk Score (walkability & transit)")
+            source_label = walk.get("source", "Walk Score")
+            live_sources_active.add(source_label)
 
         places = get_live_places_scores(name)
         if places:

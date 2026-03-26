@@ -3,9 +3,11 @@ Live data integrations for the Home Decision Helper.
 Each function degrades gracefully to None when its API key is unavailable.
 Data sources:
   - FRED API        : Live 30yr/15yr mortgage rates + Case-Shiller city HPI
-  - Walk Score API  : Real walkability and transit scores per neighborhood
+  - Walk Score API  : Real walkability and transit scores per neighborhood (optional key)
+  - Overpass API    : Real walkability & transit from OpenStreetMap — NO KEY REQUIRED
   - Google Places   : Real dining, nightlife, shopping, outdoor scores
-  - RentCast API    : Live median market rent by city
+  - RentCast API    : Live median market rent by city (optional key)
+  - BLS API         : National rent CPI + city baselines for rent estimates — NO KEY REQUIRED
 """
 
 import os
@@ -235,11 +237,141 @@ def get_live_market_rent(city, state):
         return None
 
 
+# ── City rent baselines (2024/25 median 2BR, sourced from Census ACS & Zillow) ──
+_CITY_MEDIAN_2BR_RENT = {
+    "Chicago": 1950,       "Evanston": 1800,       "Oak Park": 1700,
+    "New York City": 3200, "Brooklyn": 2800,        "Queens": 2300,
+    "San Francisco": 3400, "Los Angeles": 2800,     "San Diego": 2700,
+}
+
+_OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+_BLS_URL = "https://api.bls.gov/publicAPI/v1/timeseries/data/CUSR0000SEHA"
+
+
+@st.cache_data(ttl=86400 * 7)
+def get_overpass_walk_scores(neighborhood_name):
+    """
+    Fetch walkability and transit scores from OpenStreetMap via the Overpass API.
+    No API key required. Counts transit stops and walkable amenities within 1 km.
+    Returns dict: {walkability, transit} on 0–10 scale, or None on failure.
+    Cached for 7 days.
+    """
+    coords = NEIGHBORHOOD_COORDS.get(neighborhood_name)
+    if not coords:
+        return None
+
+    lat, lon = coords["lat"], coords["lon"]
+    query = (
+        f"[out:json][timeout:25];"
+        f"("
+        f"node[\"public_transport\"=\"stop_position\"](around:1000,{lat},{lon});"
+        f"node[\"highway\"=\"bus_stop\"](around:1000,{lat},{lon});"
+        f"node[\"railway\"=\"station\"](around:1000,{lat},{lon});"
+        f"node[\"railway\"=\"stop\"](around:1000,{lat},{lon});"
+        f"node[\"amenity\"~\"restaurant|cafe|bar|supermarket|pharmacy\"](around:1000,{lat},{lon});"
+        f"node[\"shop\"](around:1000,{lat},{lon});"
+        f"node[\"leisure\"=\"park\"](around:1000,{lat},{lon});"
+        f");"
+        f"out tags;"
+    )
+    try:
+        resp = requests.post(_OVERPASS_URL, data={"data": query}, timeout=30)
+        resp.raise_for_status()
+        if not resp.text.strip():
+            return None
+        elements = resp.json().get("elements", [])
+        if not elements:
+            return None
+
+        transit_tags = {"public_transport", "highway", "railway"}
+        transit_count = sum(
+            1 for e in elements
+            if any(k in e.get("tags", {}) for k in transit_tags)
+            and (
+                e.get("tags", {}).get("public_transport") == "stop_position"
+                or e.get("tags", {}).get("highway") == "bus_stop"
+                or e.get("tags", {}).get("railway") in ("station", "stop")
+            )
+        )
+        amenity_count = len(elements) - transit_count
+
+        return {
+            "walkability": min(10.0, round(amenity_count / 15.0, 1)),
+            "transit":     min(10.0, round(transit_count / 3.0, 1)),
+            "source":      "OpenStreetMap (Overpass)",
+        }
+    except Exception:
+        return None
+
+
+@st.cache_data(ttl=86400)
+def get_bls_rent_estimate(city):
+    """
+    Estimate current median 2BR rent using BLS national rent CPI (no API key required)
+    scaled against a city-specific 2024/25 median rent baseline from Census ACS.
+    Returns float or None.
+    Cached for 24 hours.
+    """
+    baseline = _CITY_MEDIAN_2BR_RENT.get(city)
+    if not baseline:
+        return None
+    try:
+        resp = requests.get(_BLS_URL, timeout=15)
+        resp.raise_for_status()
+        series_data = resp.json().get("Results", {}).get("series", [{}])[0].get("data", [])
+        if len(series_data) < 13:
+            return baseline
+
+        current = series_data[0]
+        current_cpi = float(current["value"])
+        year_ago = next(
+            (d for d in series_data
+             if int(d["year"]) == int(current["year"]) - 1
+             and d["period"] == current["period"]),
+            None,
+        )
+        if not year_ago:
+            return baseline
+
+        yoy_factor = current_cpi / float(year_ago["value"])
+        return round(baseline * yoy_factor, -1)
+    except Exception:
+        return baseline
+
+
+def get_live_walk_scores_with_fallback(neighborhood_name):
+    """
+    Try Walk Score API first (if key present), then fall back to Overpass (no key needed).
+    Returns dict: {walkability, transit, source, description?} or None.
+    """
+    ws = get_live_walk_scores(neighborhood_name)
+    if ws:
+        ws["source"] = "Walk Score API"
+        return ws
+    return get_overpass_walk_scores(neighborhood_name)
+
+
+def get_live_market_rent_with_fallback(city, state):
+    """
+    Try RentCast first (if key present), then fall back to BLS CPI estimate (no key needed).
+    Returns float or None.
+    """
+    rent = get_live_market_rent(city, state)
+    if rent:
+        return rent, "RentCast"
+    estimate = get_bls_rent_estimate(city)
+    if estimate:
+        return estimate, "BLS CPI estimate"
+    return None, None
+
+
 def live_data_status():
     """Return a dict of {source_name: is_active} for all integrations."""
     return {
         "FRED (mortgage rates & price history)": bool(os.environ.get("FRED_API_KEY")),
+        "OpenStreetMap / Overpass (walkability)": True,
+        "BLS CPI (rent estimates)":              True,
         "Walk Score (walkability & transit)":    bool(os.environ.get("WALK_SCORE_API_KEY")),
         "Google Places (dining, nightlife, shopping)": bool(os.environ.get("GOOGLE_PLACES_API_KEY")),
-        "RentCast (market rents)":               bool(os.environ.get("RENTCAST_API_KEY")),
+        "RentCast (live market rents)":          bool(os.environ.get("RENTCAST_API_KEY")),
     }

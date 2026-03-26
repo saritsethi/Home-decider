@@ -4,7 +4,7 @@ import uuid
 from components.navigation import create_navigation
 from utils.database import get_available_states, get_available_cities, get_neighborhood_data, save_quiz_results
 from utils.report_generator import generate_integrated_report
-from utils.live_data import get_live_mortgage_rates, get_live_market_rent
+from utils.live_data import get_live_mortgage_rates, get_live_market_rent_with_fallback
 
 st.set_page_config(page_title="Lifestyle Quiz", page_icon="✨")
 
@@ -97,11 +97,20 @@ def display_financial_info():
 
 
 def display_lifestyle_preferences():
+    states = get_available_states()
+    state = st.selectbox("Select State", states, key='state_selector_outer')
+    filtered_cities_outer = get_available_cities(state=state)
+    city_outer = st.selectbox("Select City (preview)", filtered_cities_outer, key='city_selector_outer')
+
+    rent_val, rent_source = get_live_market_rent_with_fallback(city_outer, state)
+    if rent_val:
+        st.info(f"📡 Estimated median 2BR rent in **{city_outer}**: **${rent_val:,.0f}/mo** ({rent_source})")
+
     with st.form("neighborhood_preferences_form"):
         st.subheader("Location Preferences")
 
-        states = get_available_states()
-        state = st.selectbox("Select State", states, key='state_selector')
+        states2 = get_available_states()
+        state = st.selectbox("Select State", states2, index=states2.index(state) if state in states2 else 0, key='state_selector')
 
         if state and state != st.session_state.get('selected_state'):
             st.session_state.selected_state = state

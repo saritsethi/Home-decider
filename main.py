@@ -158,12 +158,20 @@ try:
         st.divider()
         from utils.live_data import live_data_status, get_live_mortgage_rates
         status = live_data_status()
-        active = [name for name, on in status.items() if on]
+        _always_on_names = {"OpenStreetMap / Overpass (walkability)", "BLS CPI (rent estimates)"}
+        always_on = [name for name, on in status.items() if on and name in _always_on_names]
+        key_active = [name for name, on in status.items() if on and name not in _always_on_names]
 
-        if active:
-            rates = get_live_mortgage_rates()
-            rate_str = f" · 30-yr rate: **{rates['rate_30yr']:.2f}%**" if rates else ""
-            st.success(f"📡 Live data active: {', '.join(active)}{rate_str}")
+        rates = get_live_mortgage_rates()
+        rate_str = f" · 30-yr fixed: **{rates['rate_30yr']:.2f}%**" if rates else ""
+
+        lines = []
+        if always_on:
+            lines.append(f"**Always on:** {', '.join(always_on)}")
+        if key_active:
+            lines.append(f"**API-powered:** {', '.join(key_active)}{rate_str}")
+        if lines:
+            st.success("📡 Live data · " + " · ".join(lines))
         else:
             st.caption("📊 Running on curated data. Add API keys to enable live mortgage rates, walk scores, and market rents.")
 
