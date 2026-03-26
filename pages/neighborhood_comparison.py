@@ -9,6 +9,8 @@ from utils.live_data import (
     get_live_walk_scores_with_fallback,
     get_live_places_scores,
     live_data_status,
+    build_dynamic_neighborhood,
+    STATE_MEDIAN_HOME_PRICES,
 )
 
 st.set_page_config(page_title="Neighborhood Comparison", page_icon="🏘️")
@@ -71,6 +73,44 @@ def display_comparison_results(state, city, selected_neighborhoods):
     else:
         st.caption("Showing curated scores. Add API keys to enable live data.")
 
+    _render_comparison(selected_data, live_sources_active)
+
+
+def display_dynamic_results(neighborhood_dicts):
+    """Display comparison for dynamically built neighborhoods."""
+    if not neighborhood_dicts:
+        return
+
+    live_sources = set()
+    for hood in neighborhood_dicts:
+        if hood.get("_walk_source"):
+            live_sources.add(hood["_walk_source"])
+        if hood.get("_places_active"):
+            live_sources.add("Google Places (dining, nightlife, shopping, outdoor)")
+        if hood.get("_fred_series"):
+            live_sources.add("FRED Case-Shiller (price history)")
+
+    if live_sources:
+        st.success(f"📡 Live data: {' · '.join(sorted(live_sources))}")
+    else:
+        st.caption("Showing OpenStreetMap scores. Add API keys to enable additional live data.")
+
+    # Show data notes for dynamic mode
+    notes = []
+    any_estimated_places = any(not h.get("_places_active") for h in neighborhood_dicts)
+    if any_estimated_places:
+        notes.append("Dining/nightlife/shopping scores use OpenStreetMap defaults — add a Google Places key for real counts.")
+    if any(h.get("property_listings", [{}])[0].get("_estimated") for h in neighborhood_dicts if h.get("property_listings")):
+        notes.append("Property prices are state-median estimates. Check Zillow or Realtor.com for live listings.")
+    notes.append("School ratings and safety scores use national defaults for custom locations.")
+    for note in notes:
+        st.caption(f"ℹ️ {note}")
+
+    _render_comparison(neighborhood_dicts, live_sources)
+
+
+def _render_comparison(selected_data, live_sources_active):
+    """Shared rendering: radar, table, historical chart, listings."""
     st.subheader("Neighborhood Radar")
     fig = create_neighborhood_comparison_chart(selected_data)
     st.plotly_chart(fig, use_container_width=True)
@@ -80,25 +120,101 @@ def display_comparison_results(state, city, selected_neighborhoods):
     for hood in selected_data:
         rows.append({
             "Neighborhood": hood["name"],
-            "Walkability": hood["walkability_score"],
-            "Transit": hood["transport_score"],
+            "City / State": f"{hood.get('city', '')}{',' if hood.get('state') else ''} {hood.get('state', '')}".strip(", "),
+            "Walkability": hood.get("walkability_score", "—"),
+            "Transit": hood.get("transport_score", "—"),
             "Safety": hood.get("safety_score", "—"),
             "Dining": hood.get("dining_score", "—"),
             "Nightlife": hood.get("nightlife_score", "—"),
             "Outdoor": hood.get("outdoor_score", "—"),
             "Shopping": hood.get("shopping_score", "—"),
-            "Schools": hood["school_rating"],
-            "Cost of Living": hood["cost_of_living"],
+            "Schools": hood.get("school_rating", "—"),
+            "Cost of Living": hood.get("cost_of_living", "—"),
         })
     st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
 
-    hist_source = "FRED Case-Shiller Index" if "FRED Case-Shiller (price history)" in live_sources_active else "Estimated"
-    st.subheader(f"Historical Property Values ({hist_source})")
+    hist_label = "FRED Case-Shiller Index" if any("FRED" in s for s in live_sources_active) else "Estimated"
+    st.subheader(f"Historical Property Values ({hist_label})")
     hist_fig = create_historical_value_chart(selected_data)
     if hist_fig:
         st.plotly_chart(hist_fig, use_container_width=True)
     else:
         st.info("No historical data available for the selected neighborhoods.")
+
+    st.subheader("Property Listings")
+    for hood in selected_data:
+        listings = hood.get("property_listings", [])
+        is_dynamic = hood.get("_is_dynamic", False)
+        header = hood["name"]
+        if is_dynamic:
+            base = STATE_MEDIAN_HOME_PRICES.get(hood.get("state", ""), 350000)
+            header += f"  ·  Est. median: ${base:,}"
+        with st.expander(header, expanded=False):
+            if not listings:
+                st.write("No listings available.")
+            else:
+                if is_dynamic:
+                    st.caption("These are price estimates based on state median home prices, not live MLS data.")
+                for listing in listings:
+                    price = listing.get("price", "N/A")
+                    price_str = f"${price:,.0f}" if isinstance(price, (int, float)) else str(price)
+                    col1, col2, col3 = st.columns(3)
+                    col1.metric("Price", price_str)
+                    col2.metric("Beds/Baths", f"{listing.get('beds', '?')} bd / {listing.get('baths', '?')} ba")
+                    col3.metric("Sq Ft", f"{listing.get('sqft', '?'):,}" if isinstance(listing.get('sqft'), int) else "?")
+                    st.caption(f"📍 {listing.get('address', '')}  ·  {listing.get('type', '')}")
+                    st.divider()
+
+
+def search_tab():
+    """UI for searching any US location."""
+    st.markdown(
+        "Type any US neighborhood, city, or address — the app will geocode it and fetch "
+        "live scores from OpenStreetMap, Google Places, and FRED."
+    )
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        q1 = st.text_input("Location 1", placeholder="e.g. South Congress, Austin TX")
+    with col2:
+        q2 = st.text_input("Location 2 (optional)", placeholder="e.g. Hyde Park, Chicago IL")
+    with col3:
+        q3 = st.text_input("Location 3 (optional)", placeholder="e.g. Capitol Hill, Seattle WA")
+
+    queries = [q.strip() for q in [q1, q2, q3] if q.strip()]
+
+    if st.button("Search & Compare", type="primary", key="search_btn"):
+        if not queries:
+            st.warning("Please enter at least one location.")
+            return
+
+        neighborhoods = []
+        for q in queries:
+            with st.spinner(f"Looking up {q}…"):
+                hood = build_dynamic_neighborhood(q)
+            if hood:
+                neighborhoods.append(hood)
+                st.success(f"✅ Found: **{hood['neighborhood']}**, {hood['city']}, {hood['state']}")
+            else:
+                st.error(
+                    f"❌ Could not find **{q}**. Try adding the city/state, e.g. "
+                    f"\"Montrose, Houston TX\" or \"Capitol Hill, Denver CO\"."
+                )
+
+        if neighborhoods:
+            st.divider()
+            display_dynamic_results(neighborhoods)
+
+
+def curated_tab():
+    """UI for the existing curated city/neighborhood dropdowns."""
+    state, city, selected_neighborhoods = create_neighborhood_inputs()
+
+    if st.button("Compare Neighborhoods", type="primary", key="curated_btn"):
+        if not selected_neighborhoods:
+            st.warning("Please select at least one neighborhood.")
+        else:
+            display_comparison_results(state, city, selected_neighborhoods)
 
 
 def main():
@@ -107,7 +223,7 @@ def main():
     st.title("Neighborhood Comparison Tool")
     st.write(
         "Compare neighborhoods side-by-side on key metrics. "
-        "Scores update automatically from live sources when API keys are configured."
+        "Search any US location, or browse our curated city list."
     )
 
     status = live_data_status()
@@ -128,13 +244,13 @@ def main():
             for src in inactive:
                 st.write(f"⬜ {src}")
 
-    state, city, selected_neighborhoods = create_neighborhood_inputs()
+    tab1, tab2 = st.tabs(["🔍 Search Any US Location", "📋 Browse Curated Cities"])
 
-    if st.button("Compare Neighborhoods", type="primary"):
-        if not selected_neighborhoods:
-            st.warning("Please select at least one neighborhood.")
-        else:
-            display_comparison_results(state, city, selected_neighborhoods)
+    with tab1:
+        search_tab()
+
+    with tab2:
+        curated_tab()
 
 
 if __name__ == "__main__":
