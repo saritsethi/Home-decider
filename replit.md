@@ -89,6 +89,9 @@ Each neighborhood carries: `walkability_score`, `transport_score`, `school_ratin
 `quiet_score`, `shopping_score` — all on a 0–10 scale.
 
 ### Supported Locations
+**Any US location** — Neighborhood Comparison and Lifestyle Quiz now accept free-text search for any US city or neighborhood via Nominatim geocoding. Live scores are fetched dynamically from Overpass (walkability/transit), Google Places (dining/nightlife/shopping/outdoor), and FRED (price history using nearest Case-Shiller metro for the state).
+
+**Curated city list** (pre-scored, always fast):
 - **Illinois**: Chicago (Lincoln Park, Lake View, Wicker Park), Evanston (Downtown, South), Oak Park (Downtown, Frank Lloyd Wright District)
 - **New York**: NYC (Upper West Side, Harlem, East Village), Brooklyn (Park Slope, Williamsburg, DUMBO), Queens (Astoria, Long Island City, Forest Hills)
 - **California**: San Francisco (Pacific Heights, Mission District, Sunset District), Los Angeles (Silver Lake, Santa Monica, Eagle Rock), San Diego (North Park, La Jolla, Hillcrest)
