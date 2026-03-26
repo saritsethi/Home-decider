@@ -438,42 +438,55 @@ _NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 _NOMINATIM_HEADERS = {"User-Agent": "HomeDecisionHelper/1.0 (contact@homedecisionhelper.app)"}
 
 
+def _parse_nominatim_result(r, fallback_name=""):
+    """Parse a single Nominatim result dict into our standard geo dict."""
+    addr = r.get("address", {})
+    city = (addr.get("city") or addr.get("town") or
+            addr.get("village") or addr.get("county", ""))
+    state = addr.get("state", "")
+    neighborhood = (addr.get("neighbourhood") or addr.get("suburb") or
+                    fallback_name.split(",")[0].strip())
+    return {
+        "lat": float(r["lat"]),
+        "lon": float(r["lon"]),
+        "display_name": r.get("display_name", fallback_name),
+        "city": city,
+        "state": state,
+        "neighborhood": neighborhood,
+    }
+
+
 @st.cache_data(ttl=86400 * 30)
-def geocode_location(query):
+def search_locations(query, limit=5):
     """
-    Geocode any US address, neighborhood, or city using Nominatim (OpenStreetMap).
-    No API key required. Returns dict with lat, lon, display_name, city, state — or None.
+    Search for up to `limit` US locations matching `query` using Nominatim.
+    No API key required. Returns a list of geo dicts (may be empty).
     Cached for 30 days.
+    Each dict: {lat, lon, display_name, city, state, neighborhood}
     """
     try:
         resp = requests.get(
             _NOMINATIM_URL,
-            params={"q": query + ", USA", "format": "json", "limit": 1,
+            params={"q": query + ", USA", "format": "json", "limit": limit,
                     "countrycodes": "us", "addressdetails": 1},
             headers=_NOMINATIM_HEADERS,
             timeout=10,
         )
         resp.raise_for_status()
         results = resp.json()
-        if not results:
-            return None
-        r = results[0]
-        addr = r.get("address", {})
-        city = (addr.get("city") or addr.get("town") or
-                addr.get("village") or addr.get("county", ""))
-        state = addr.get("state", "")
-        neighborhood = (addr.get("neighbourhood") or addr.get("suburb") or
-                        query.split(",")[0].strip())
-        return {
-            "lat": float(r["lat"]),
-            "lon": float(r["lon"]),
-            "display_name": r.get("display_name", query),
-            "city": city,
-            "state": state,
-            "neighborhood": neighborhood,
-        }
+        return [_parse_nominatim_result(r, query) for r in results]
     except Exception:
-        return None
+        return []
+
+
+@st.cache_data(ttl=86400 * 30)
+def geocode_location(query):
+    """
+    Geocode any US address/neighborhood/city using Nominatim — returns the single
+    best match as a geo dict, or None. Cached for 30 days.
+    """
+    results = search_locations(query, limit=1)
+    return results[0] if results else None
 
 
 @st.cache_data(ttl=86400 * 7)
@@ -604,23 +617,11 @@ def _generate_estimated_listings(base_price, neighborhood_name, state):
     return listings
 
 
-@st.cache_data(ttl=3600)
-def build_dynamic_neighborhood(search_query):
+def _build_neighborhood_from_geo(geo):
     """
-    Build a complete neighborhood profile for ANY US location by combining:
-      - Nominatim geocoding (free, no key)
-      - Overpass API for walkability/transit (free, no key)
-      - Google Places for dining/nightlife/shopping/outdoor (needs key, optional)
-      - FRED Case-Shiller for price history (needs key, optional)
-      - State-level median prices and rents as baselines
-
-    Returns a neighborhood dict compatible with the existing comparison display,
-    or None if geocoding fails.
+    Internal: build a neighborhood profile dict from a pre-resolved geo dict.
+    Shared by both build_dynamic_neighborhood and build_dynamic_neighborhood_from_geo.
     """
-    geo = geocode_location(search_query)
-    if not geo:
-        return None
-
     lat, lon = geo["lat"], geo["lon"]
     state = geo["state"]
     city = geo["city"]
@@ -686,5 +687,30 @@ def build_dynamic_neighborhood(search_query):
         "_walk_source": walk.get("source", "OpenStreetMap"),
         "_places_active": bool(places),
         "_fred_series": fred_series,
-        "_search_query": search_query,
+        "_search_query": geo.get("display_name", neighborhood_name),
     }
+
+
+@st.cache_data(ttl=3600)
+def build_dynamic_neighborhood_from_geo(geo):
+    """
+    Build a neighborhood profile from a pre-resolved geo dict (e.g. from
+    search_locations). Skips geocoding entirely — use this after the user
+    has confirmed their location selection.
+    Returns a neighborhood dict or None.
+    """
+    if not geo:
+        return None
+    return _build_neighborhood_from_geo(geo)
+
+
+@st.cache_data(ttl=3600)
+def build_dynamic_neighborhood(search_query):
+    """
+    Build a neighborhood profile for any US location by geocoding `search_query`
+    and then fetching live scores. Returns a neighborhood dict or None.
+    """
+    geo = geocode_location(search_query)
+    if not geo:
+        return None
+    return _build_neighborhood_from_geo(geo)
