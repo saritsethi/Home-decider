@@ -375,3 +375,316 @@ def live_data_status():
         "Google Places (dining, nightlife, shopping)": bool(os.environ.get("GOOGLE_PLACES_API_KEY")),
         "RentCast (live market rents)":          bool(os.environ.get("RENTCAST_API_KEY")),
     }
+
+
+# ── US-wide expansion: geocoding + dynamic neighborhood builder ───────────────
+
+# Median home prices by state (2024 estimates, Zillow/Census ACS)
+STATE_MEDIAN_HOME_PRICES = {
+    "Alabama": 215000, "Alaska": 355000, "Arizona": 365000, "Arkansas": 195000,
+    "California": 680000, "Colorado": 495000, "Connecticut": 370000, "Delaware": 330000,
+    "Florida": 415000, "Georgia": 320000, "Hawaii": 820000, "Idaho": 395000,
+    "Illinois": 285000, "Indiana": 245000, "Iowa": 215000, "Kansas": 230000,
+    "Kentucky": 220000, "Louisiana": 225000, "Maine": 360000, "Maryland": 415000,
+    "Massachusetts": 570000, "Michigan": 245000, "Minnesota": 320000, "Mississippi": 190000,
+    "Missouri": 230000, "Montana": 415000, "Nebraska": 250000, "Nevada": 395000,
+    "New Hampshire": 445000, "New Jersey": 475000, "New Mexico": 290000, "New York": 420000,
+    "North Carolina": 325000, "North Dakota": 255000, "Ohio": 235000, "Oklahoma": 220000,
+    "Oregon": 460000, "Pennsylvania": 290000, "Rhode Island": 435000, "South Carolina": 305000,
+    "South Dakota": 295000, "Tennessee": 345000, "Texas": 315000, "Utah": 495000,
+    "Vermont": 390000, "Virginia": 385000, "Washington": 535000, "West Virginia": 180000,
+    "Wisconsin": 275000, "Wyoming": 340000,
+}
+
+# Median 2BR monthly rent by state (2024 estimates)
+STATE_MEDIAN_RENT = {
+    "Alabama": 1100, "Alaska": 1500, "Arizona": 1650, "Arkansas": 1000,
+    "California": 2800, "Colorado": 1950, "Connecticut": 1700, "Delaware": 1600,
+    "Florida": 1900, "Georgia": 1600, "Hawaii": 2800, "Idaho": 1500,
+    "Illinois": 1550, "Indiana": 1200, "Iowa": 1050, "Kansas": 1100,
+    "Kentucky": 1100, "Louisiana": 1150, "Maine": 1500, "Maryland": 1950,
+    "Massachusetts": 2400, "Michigan": 1200, "Minnesota": 1500, "Mississippi": 1000,
+    "Missouri": 1150, "Montana": 1400, "Nebraska": 1150, "Nevada": 1700,
+    "New Hampshire": 1800, "New Jersey": 2200, "New Mexico": 1300, "New York": 2200,
+    "North Carolina": 1500, "North Dakota": 1150, "Ohio": 1150, "Oklahoma": 1100,
+    "Oregon": 1800, "Pennsylvania": 1400, "Rhode Island": 1800, "South Carolina": 1450,
+    "South Dakota": 1150, "Tennessee": 1500, "Texas": 1550, "Utah": 1700,
+    "Vermont": 1600, "Virginia": 1800, "Washington": 2100, "West Virginia": 900,
+    "Wisconsin": 1300, "Wyoming": 1300,
+}
+
+# Map each state to its nearest Case-Shiller metro FRED series
+STATE_TO_FRED_SERIES = {
+    "Alabama": "ATXRSA", "Alaska": "SFXRSA", "Arizona": "PHXXRSA",
+    "Arkansas": "DAXRSA", "California": "SFXRSA", "Colorado": "DNXRSA",
+    "Connecticut": "NYXRSA", "Delaware": "PHXRSA", "Florida": "TPXRSA",
+    "Georgia": "ATXRSA", "Hawaii": "SFXRSA", "Idaho": "PDXRSA",
+    "Illinois": "CHXRSA", "Indiana": "CHXRSA", "Iowa": "CHXRSA",
+    "Kansas": "DAXRSA", "Kentucky": "CHXRSA", "Louisiana": "DAXRSA",
+    "Maine": "BOXRSA", "Maryland": "DCXRSA", "Massachusetts": "BOXRSA",
+    "Michigan": "DTXRSA", "Minnesota": "MNXRSA", "Mississippi": "ATXRSA",
+    "Missouri": "CHXRSA", "Montana": "PDXRSA", "Nebraska": "MNXRSA",
+    "Nevada": "LVXRSA", "New Hampshire": "BOXRSA", "New Jersey": "NYXRSA",
+    "New Mexico": "DAXRSA", "New York": "NYXRSA", "North Carolina": "CHAXRSA",
+    "North Dakota": "MNXRSA", "Ohio": "CLEXRSA", "Oklahoma": "DAXRSA",
+    "Oregon": "PDXRSA", "Pennsylvania": "PHXRSA", "Rhode Island": "BOXRSA",
+    "South Carolina": "CHAXRSA", "South Dakota": "MNXRSA", "Tennessee": "ATXRSA",
+    "Texas": "DAXRSA", "Utah": "DNXRSA", "Vermont": "BOXRSA",
+    "Virginia": "DCXRSA", "Washington": "WDXRSA", "West Virginia": "DCXRSA",
+    "Wisconsin": "MNXRSA", "Wyoming": "DNXRSA",
+}
+
+_NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+_NOMINATIM_HEADERS = {"User-Agent": "HomeDecisionHelper/1.0 (contact@homedecisionhelper.app)"}
+
+
+@st.cache_data(ttl=86400 * 30)
+def geocode_location(query):
+    """
+    Geocode any US address, neighborhood, or city using Nominatim (OpenStreetMap).
+    No API key required. Returns dict with lat, lon, display_name, city, state — or None.
+    Cached for 30 days.
+    """
+    try:
+        resp = requests.get(
+            _NOMINATIM_URL,
+            params={"q": query + ", USA", "format": "json", "limit": 1,
+                    "countrycodes": "us", "addressdetails": 1},
+            headers=_NOMINATIM_HEADERS,
+            timeout=10,
+        )
+        resp.raise_for_status()
+        results = resp.json()
+        if not results:
+            return None
+        r = results[0]
+        addr = r.get("address", {})
+        city = (addr.get("city") or addr.get("town") or
+                addr.get("village") or addr.get("county", ""))
+        state = addr.get("state", "")
+        neighborhood = (addr.get("neighbourhood") or addr.get("suburb") or
+                        query.split(",")[0].strip())
+        return {
+            "lat": float(r["lat"]),
+            "lon": float(r["lon"]),
+            "display_name": r.get("display_name", query),
+            "city": city,
+            "state": state,
+            "neighborhood": neighborhood,
+        }
+    except Exception:
+        return None
+
+
+@st.cache_data(ttl=86400 * 7)
+def get_overpass_walk_scores_by_coords(lat, lon):
+    """
+    Fetch walkability and transit scores from Overpass API using explicit coordinates.
+    No API key required. Cached for 7 days.
+    Returns dict: {walkability, transit, source} on 0–10 scale, or None.
+    """
+    query = (
+        f"[out:json][timeout:25];"
+        f"("
+        f"node[\"public_transport\"=\"stop_position\"](around:1000,{lat},{lon});"
+        f"node[\"highway\"=\"bus_stop\"](around:1000,{lat},{lon});"
+        f"node[\"railway\"=\"station\"](around:1000,{lat},{lon});"
+        f"node[\"railway\"=\"stop\"](around:1000,{lat},{lon});"
+        f"node[\"amenity\"~\"restaurant|cafe|bar|supermarket|pharmacy\"](around:1000,{lat},{lon});"
+        f"node[\"shop\"](around:1000,{lat},{lon});"
+        f"node[\"leisure\"=\"park\"](around:1000,{lat},{lon});"
+        f");"
+        f"out tags;"
+    )
+    try:
+        resp = requests.post(_OVERPASS_URL, data={"data": query}, timeout=30)
+        resp.raise_for_status()
+        if not resp.text.strip():
+            return None
+        elements = resp.json().get("elements", [])
+        if not elements:
+            return None
+        transit_tags = {"public_transport", "highway", "railway"}
+        transit_count = sum(
+            1 for e in elements
+            if any(k in e.get("tags", {}) for k in transit_tags)
+            and (
+                e.get("tags", {}).get("public_transport") == "stop_position"
+                or e.get("tags", {}).get("highway") == "bus_stop"
+                or e.get("tags", {}).get("railway") in ("station", "stop")
+            )
+        )
+        amenity_count = len(elements) - transit_count
+        return {
+            "walkability": min(10.0, round(amenity_count / 15.0, 1)),
+            "transit":     min(10.0, round(transit_count / 3.0, 1)),
+            "source":      "OpenStreetMap (Overpass)",
+        }
+    except Exception:
+        return None
+
+
+@st.cache_data(ttl=86400 * 7)
+def get_live_places_scores_by_coords(lat, lon):
+    """
+    Fetch dining, nightlife, shopping, outdoor scores from Google Places API
+    using explicit coordinates. Cached for 7 days.
+    Returns dict: {dining, nightlife, shopping, outdoor} on 0–10 scale, or None.
+    """
+    api_key = os.environ.get("GOOGLE_PLACES_API_KEY")
+    if not api_key:
+        return None
+    location = f"{lat},{lon}"
+    category_types = {
+        "dining":    ["restaurant", "cafe"],
+        "nightlife": ["bar", "night_club"],
+        "shopping":  ["shopping_mall", "clothing_store", "grocery_or_supermarket"],
+        "outdoor":   ["park"],
+    }
+    scores = {}
+    for category, types in category_types.items():
+        total = 0
+        for place_type in types:
+            try:
+                resp = requests.get(
+                    "https://maps.googleapis.com/maps/api/place/nearbysearch/json",
+                    params={"location": location, "radius": 1000, "type": place_type, "key": api_key},
+                    timeout=10,
+                )
+                resp.raise_for_status()
+                total += len(resp.json().get("results", []))
+            except Exception:
+                pass
+        scores[category] = min(10.0, round(total / 2.0, 1))
+    return scores if scores else None
+
+
+@st.cache_data(ttl=86400)
+def get_live_price_history_by_series(series_id, base_price):
+    """
+    Fetch 5-year home price history from any FRED Case-Shiller series, scaled to base_price.
+    Returns JSON string or None.
+    """
+    from datetime import datetime, timedelta
+    five_years_ago = (datetime.now() - timedelta(days=5 * 365)).strftime("%Y-%m-%d")
+    obs = _fred_fetch(series_id, observation_start=five_years_ago, sort_order="asc")
+    if not obs or len(obs) < 2:
+        return None
+    valid = [(o["date"], float(o["value"])) for o in obs if o["value"] != "."]
+    if len(valid) < 2:
+        return None
+    anchor = valid[-1][1]
+    history = [
+        {"date": date, "value": round(base_price * (idx / anchor), 2)}
+        for date, idx in valid
+    ]
+    return json.dumps(history)
+
+
+def _generate_estimated_listings(base_price, neighborhood_name, state):
+    """Generate 3 price-realistic estimated property listings for any US location."""
+    import random
+    rng = random.Random(hash(f"{neighborhood_name}{state}"))
+    listing_types = [("Single Family", 3, 2, 1800), ("Condo", 2, 2, 1100), ("Townhouse", 3, 2, 1500)]
+    listings = []
+    for i, (ltype, beds, baths, sqft) in enumerate(listing_types):
+        factor = rng.uniform(0.88, 1.15)
+        price = round(base_price * factor / 1000) * 1000
+        address_num = rng.randint(100, 9999)
+        street = rng.choice(["Main St", "Oak Ave", "Maple Dr", "Park Blvd", "Cedar Ln"])
+        listings.append({
+            "address": f"{address_num} {street}, {neighborhood_name}",
+            "price": price,
+            "beds": beds,
+            "baths": baths,
+            "sqft": sqft + rng.randint(-200, 300),
+            "type": ltype,
+            "_estimated": True,
+        })
+    return listings
+
+
+@st.cache_data(ttl=3600)
+def build_dynamic_neighborhood(search_query):
+    """
+    Build a complete neighborhood profile for ANY US location by combining:
+      - Nominatim geocoding (free, no key)
+      - Overpass API for walkability/transit (free, no key)
+      - Google Places for dining/nightlife/shopping/outdoor (needs key, optional)
+      - FRED Case-Shiller for price history (needs key, optional)
+      - State-level median prices and rents as baselines
+
+    Returns a neighborhood dict compatible with the existing comparison display,
+    or None if geocoding fails.
+    """
+    geo = geocode_location(search_query)
+    if not geo:
+        return None
+
+    lat, lon = geo["lat"], geo["lon"]
+    state = geo["state"]
+    city = geo["city"]
+    neighborhood_name = geo["neighborhood"]
+
+    # Walkability and transit from Overpass (always available)
+    walk = get_overpass_walk_scores_by_coords(lat, lon) or {}
+    walkability = walk.get("walkability", 5.0)
+    transit = walk.get("transit", 5.0)
+
+    # Dining/nightlife/shopping/outdoor from Google Places (optional)
+    places = get_live_places_scores_by_coords(lat, lon) or {}
+    dining = places.get("dining", 5.0)
+    nightlife = places.get("nightlife", 5.0)
+    shopping = places.get("shopping", 5.0)
+    outdoor = places.get("outdoor", 5.0)
+
+    # quiet is inverse of nightlife on a 0-10 scale
+    quiet = round(max(0.0, 10.0 - nightlife), 1)
+
+    # Base price from state median
+    base_price = STATE_MEDIAN_HOME_PRICES.get(state, 350000)
+
+    # Cost of living on 1-10 scale, derived from state median price
+    cost_of_living = min(10.0, max(1.0, round((base_price - 150000) / 65000, 1)))
+
+    # FRED historical price data using nearest metro series for this state
+    fred_series = STATE_TO_FRED_SERIES.get(state)
+    historical_values = None
+    if fred_series:
+        historical_values = get_live_price_history_by_series(fred_series, base_price)
+
+    # Fallback: generate deterministic historical values
+    if not historical_values:
+        from utils.database import generate_historical_values
+        historical_values = json.dumps(generate_historical_values(base_price))
+
+    # Rent estimate from state baseline
+    rent_estimate = STATE_MEDIAN_RENT.get(state, 1500)
+
+    # Property listings (estimated from state median)
+    listings = _generate_estimated_listings(base_price, neighborhood_name, state)
+
+    return {
+        "name": neighborhood_name,
+        "city": city,
+        "state": state,
+        "walkability_score": walkability,
+        "transport_score": transit,
+        "school_rating": 6.5,
+        "cost_of_living": cost_of_living,
+        "safety_score": 6.0,
+        "nightlife_score": nightlife,
+        "dining_score": dining,
+        "outdoor_score": outdoor,
+        "quiet_score": quiet,
+        "shopping_score": shopping,
+        "property_listings": listings,
+        "historical_values": historical_values,
+        "_is_dynamic": True,
+        "_geo": geo,
+        "_rent_estimate": rent_estimate,
+        "_walk_source": walk.get("source", "OpenStreetMap"),
+        "_places_active": bool(places),
+        "_fred_series": fred_series,
+        "_search_query": search_query,
+    }
