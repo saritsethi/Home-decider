@@ -4,7 +4,6 @@ import json
 from utils.visualization import create_neighborhood_comparison_chart, create_historical_value_chart
 from utils.report_generator import create_pdf_report
 import pandas as pd
-import base64
 import os
 
 st.set_page_config(page_title="Report Results", page_icon="📊", layout="wide")
@@ -24,14 +23,6 @@ st.markdown('''
     </style>
 ''', unsafe_allow_html=True)
 
-
-def get_pdf_download_link(pdf_path, link_text="Download PDF Report"):
-    """Generate a download link for the PDF file."""
-    with open(pdf_path, "rb") as f:
-        pdf_bytes = f.read()
-    b64 = base64.b64encode(pdf_bytes).decode()
-    href = f'<a href="data:application/pdf;base64,{b64}" download="home_decision_report.pdf">{link_text}</a>'
-    return href
 
 
 @st.cache_data
@@ -79,7 +70,14 @@ def display_report_results():
             st.session_state.preferences
         )
 
-        st.markdown(get_pdf_download_link(pdf_path), unsafe_allow_html=True)
+        with open(pdf_path, "rb") as f:
+            pdf_bytes = f.read()
+        st.download_button(
+            label="📄 Download PDF Report",
+            data=pdf_bytes,
+            file_name="home_decision_report.pdf",
+            mime="application/pdf",
+        )
 
         st.divider()
         st.header("💰 Financial Analysis")
