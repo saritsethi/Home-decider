@@ -257,9 +257,13 @@ def create_pdf_report(report_data, family_info, preferences):
         if listings:
             story.append(Paragraph("Available Properties:", styles['Heading4']))
             for listing in listings:
+                beds  = listing.get('bedrooms', listing.get('beds', '?'))
+                baths = listing.get('bathrooms', listing.get('baths', '?'))
+                sqft  = listing.get('sqft', '?')
+                built = listing.get('year_built', listing.get('type', ''))
+                built_str = f", Built {built}" if str(built).isdigit() else (f" ({built})" if built else "")
                 story.append(Paragraph(
-                    f"${listing['price']:,} — {listing['bedrooms']}bd/{listing['bathrooms']}ba, "
-                    f"{listing['sqft']:,} sqft, Built {listing['year_built']}",
+                    f"${listing['price']:,} — {beds}bd/{baths}ba, {sqft:,} sqft{built_str}",
                     styles['Normal']
                 ))
         story.append(Spacer(1, 20))

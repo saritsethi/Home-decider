@@ -190,17 +190,24 @@ def display_report_results():
                     if listings:
                         st.subheader(f"Properties in {hood['name']}")
                         for listing in listings:
+                            beds  = listing.get('bedrooms', listing.get('beds', '?'))
+                            baths = listing.get('bathrooms', listing.get('baths', '?'))
+                            sqft  = listing.get('sqft', 0)
                             with st.expander(
-                                f"${listing['price']:,} — {listing['bedrooms']}bd/{listing['bathrooms']}ba",
+                                f"${listing['price']:,} — {beds}bd/{baths}ba",
                                 expanded=False
                             ):
                                 col1, col2 = st.columns(2)
                                 with col1:
-                                    st.metric("Square Feet", f"{listing['sqft']:,}")
-                                    st.metric("Year Built", listing['year_built'])
+                                    st.metric("Square Feet", f"{sqft:,}" if sqft else "N/A")
+                                    built = listing.get('year_built', listing.get('type', 'N/A'))
+                                    st.metric("Year Built / Type", str(built))
                                 with col2:
-                                    st.metric("Price/sqft", f"${listing['price'] / listing['sqft']:,.2f}")
-                                st.write(listing['description'])
+                                    st.metric("Price/sqft", f"${listing['price'] / sqft:,.2f}" if sqft else "N/A")
+                                if listing.get('description'):
+                                    st.write(listing['description'])
+                                if listing.get('_estimated'):
+                                    st.caption("Estimated listing — not a real property")
             else:
                 st.warning("No neighborhood recommendations available. Please complete the lifestyle quiz.")
 
