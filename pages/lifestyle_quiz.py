@@ -211,15 +211,39 @@ def display_lifestyle_preferences():
             }
 
             if location_mode == "Search any US city or neighborhood":
-                with st.spinner(f"Fetching data for {confirmed_geo.get('neighborhood', city)}…"):
-                    dynamic_hood = build_dynamic_neighborhood_from_geo(confirmed_geo)
-                if not dynamic_hood:
-                    st.error(
-                        "Could not load neighborhood data for the selected location. "
-                        "Please go back and try a different location."
-                    )
-                    return
-                matches = [dynamic_hood]
+                geo_city  = (confirmed_geo.get('city') or '').strip()
+                geo_state = (confirmed_geo.get('state') or '').strip()
+
+                _curated_map = {
+                    "Illinois":    ["Chicago", "Evanston", "Oak Park"],
+                    "New York":    ["New York City", "Brooklyn", "Queens", "New York"],
+                    "California":  ["San Francisco", "Los Angeles", "San Diego"],
+                }
+
+                curated_match_city  = None
+                curated_match_state = None
+                for s, cities in _curated_map.items():
+                    if s.lower() in geo_state.lower() or geo_state.lower() in s.lower():
+                        for c in cities:
+                            if c.lower() in geo_city.lower() or geo_city.lower() in c.lower():
+                                curated_match_city  = c
+                                curated_match_state = s
+                                break
+                    if curated_match_city:
+                        break
+
+                if curated_match_city:
+                    matches = get_neighborhood_data(city=curated_match_city, state=curated_match_state)
+                else:
+                    with st.spinner(f"Fetching live data for {geo_city or 'your location'}…"):
+                        dynamic_hood = build_dynamic_neighborhood_from_geo(confirmed_geo)
+                    if not dynamic_hood:
+                        st.error(
+                            "Could not load neighborhood data for the selected location. "
+                            "Please go back and try a different location."
+                        )
+                        return
+                    matches = [dynamic_hood]
             else:
                 matches = get_neighborhood_data(city=city, state=state)
 
