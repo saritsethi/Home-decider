@@ -70,16 +70,26 @@ def generate_integrated_report(preferences, family_info, neighborhoods):
     get_transport_score = transport_score_map.get(preferences.get('transport', 'Mix'),
                                                    lambda h: 5)
 
-    matches = []
-    for hood in neighborhoods:
-        listings = hood.get('property_listings', [])
-        if listings:
-            min_price = min(l['price'] for l in listings)
-            if min_price > max_home_price * 2.5:
-                continue
+    nightlife_pref = preferences.get('nightlife', 5)
+    shopping_pref = preferences.get('shopping', 5)
+    outdoor_pref = preferences.get('outdoor', 5)
+    quiet_pref = preferences.get('quiet', 5)
 
+    all_scored = []
+    for hood in neighborhoods:
         scores = {}
         reasons = []
+
+        listings = hood.get('property_listings', [])
+        if isinstance(listings, str):
+            try:
+                listings = json.loads(listings)
+            except Exception:
+                listings = []
+        if listings:
+            min_price = min(l['price'] for l in listings)
+            if min_price > max_home_price * 1.5:
+                reasons.append(f"Note: listings start at ${min_price:,.0f} — may be above your budget")
 
         school_score = hood['school_rating']
         if family_info.get('children', 0) > 0:
@@ -100,15 +110,14 @@ def generate_integrated_report(preferences, family_info, neighborhoods):
         housing_match = max(0, 10 - abs(hood_urban - pref_urban))
         scores['housing_type'] = housing_match
 
-        nightlife_pref = preferences.get('nightlife', 5)
-        shopping_pref = preferences.get('shopping', 5)
-        outdoor_pref = preferences.get('outdoor', 5)
-        quiet_pref = preferences.get('quiet', 5)
+        def _lifestyle_match(score, pref):
+            weight = max(0.5, pref / 5)
+            return min(10.0, score * weight)
 
-        nightlife_match = hood.get('nightlife_score', 5) * nightlife_pref / 10
-        shopping_match = hood.get('shopping_score', 5) * shopping_pref / 10
-        outdoor_match = hood.get('outdoor_score', 5) * outdoor_pref / 10
-        quiet_match = hood.get('quiet_score', 5) * quiet_pref / 10
+        nightlife_match = _lifestyle_match(hood.get('nightlife_score', 5), nightlife_pref)
+        shopping_match  = _lifestyle_match(hood.get('shopping_score', 5),  shopping_pref)
+        outdoor_match   = _lifestyle_match(hood.get('outdoor_score', 5),   outdoor_pref)
+        quiet_match     = _lifestyle_match(hood.get('quiet_score', 5),     quiet_pref)
         lifestyle_score = (nightlife_match + shopping_match + outdoor_match + quiet_match) / 4
         scores['lifestyle'] = lifestyle_score
 
@@ -121,15 +130,21 @@ def generate_integrated_report(preferences, family_info, neighborhoods):
         if shopping_pref >= 7 and hood.get('shopping_score', 5) >= 7:
             reasons.append("Great shopping and retail access")
 
-        historical_data = (hood['historical_values'] if isinstance(hood['historical_values'], list)
-                           else json.loads(hood['historical_values']))
+        try:
+            historical_data = (hood['historical_values'] if isinstance(hood['historical_values'], list)
+                               else json.loads(hood['historical_values']))
+        except Exception:
+            historical_data = []
         if len(historical_data) >= 2:
             start_value = historical_data[0]['value']
             end_value = historical_data[-1]['value']
-            appreciation = ((end_value - start_value) / start_value) * 100
-            appreciation_score = min(10, appreciation / 3)
-            if appreciation > 15:
-                reasons.append(f"Strong property value growth: {appreciation:.1f}% over 5 years")
+            if start_value > 0:
+                appreciation = ((end_value - start_value) / start_value) * 100
+                appreciation_score = min(10, appreciation / 3)
+                if appreciation > 15:
+                    reasons.append(f"Strong property value growth: {appreciation:.1f}% over 5 years")
+            else:
+                appreciation_score = 5
         else:
             appreciation_score = 5
         scores['appreciation'] = appreciation_score
@@ -138,18 +153,18 @@ def generate_integrated_report(preferences, family_info, neighborhoods):
         final_score = int((sum(scores.values()) / max_possible) * 100)
         final_score = min(100, max(0, final_score))
 
-        if final_score >= 50:
-            matches.append({
-                "neighborhood": hood,
-                "match_score": final_score,
-                "reasons": reasons
-            })
+        all_scored.append({
+            "neighborhood": hood,
+            "match_score": final_score,
+            "reasons": reasons
+        })
 
-    matches.sort(key=lambda x: x['match_score'], reverse=True)
+    all_scored.sort(key=lambda x: x['match_score'], reverse=True)
+    matches = all_scored[:3]
 
     return {
         'max_home_price': max_home_price,
-        'recommended_neighborhoods': matches[:3],
+        'recommended_neighborhoods': matches,
         'rent_vs_buy_recommendation': rent_vs_buy
     }
 
