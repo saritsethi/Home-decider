@@ -13,6 +13,7 @@ Data sources:
 import os
 import json
 import requests
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 import streamlit as st
 
@@ -192,22 +193,32 @@ def get_live_places_scores(neighborhood_name):
         "outdoor":   ["park"],
     }
 
-    scores = {}
-    for category, types in category_types.items():
-        total = 0
-        for place_type in types:
-            try:
-                resp = requests.get(
-                    "https://maps.googleapis.com/maps/api/place/nearbysearch/json",
-                    params={"location": location, "radius": 1000, "type": place_type, "key": api_key},
-                    timeout=10,
-                )
-                resp.raise_for_status()
-                total += len(resp.json().get("results", []))
-            except Exception:
-                pass
-        scores[category] = min(10.0, round(total / 2.0, 1))
+    all_tasks = [
+        (category, place_type)
+        for category, types in category_types.items()
+        for place_type in types
+    ]
+    counts = {cat: 0 for cat in category_types}
 
+    def _fetch(category, place_type):
+        try:
+            resp = requests.get(
+                "https://maps.googleapis.com/maps/api/place/nearbysearch/json",
+                params={"location": location, "radius": 1000, "type": place_type, "key": api_key},
+                timeout=10,
+            )
+            resp.raise_for_status()
+            return category, len(resp.json().get("results", []))
+        except Exception:
+            return category, 0
+
+    with ThreadPoolExecutor(max_workers=len(all_tasks)) as executor:
+        futures = {executor.submit(_fetch, cat, ptype): (cat, ptype) for cat, ptype in all_tasks}
+        for future in as_completed(futures):
+            cat, n = future.result()
+            counts[cat] += n
+
+    scores = {cat: min(10.0, round(n / 2.0, 1)) for cat, n in counts.items()}
     return scores if scores else None
 
 
@@ -554,21 +565,32 @@ def get_live_places_scores_by_coords(lat, lon):
         "shopping":  ["shopping_mall", "clothing_store", "grocery_or_supermarket"],
         "outdoor":   ["park"],
     }
-    scores = {}
-    for category, types in category_types.items():
-        total = 0
-        for place_type in types:
-            try:
-                resp = requests.get(
-                    "https://maps.googleapis.com/maps/api/place/nearbysearch/json",
-                    params={"location": location, "radius": 1000, "type": place_type, "key": api_key},
-                    timeout=10,
-                )
-                resp.raise_for_status()
-                total += len(resp.json().get("results", []))
-            except Exception:
-                pass
-        scores[category] = min(10.0, round(total / 2.0, 1))
+    all_tasks = [
+        (category, place_type)
+        for category, types in category_types.items()
+        for place_type in types
+    ]
+    counts = {cat: 0 for cat in category_types}
+
+    def _fetch2(category, place_type):
+        try:
+            resp = requests.get(
+                "https://maps.googleapis.com/maps/api/place/nearbysearch/json",
+                params={"location": location, "radius": 1000, "type": place_type, "key": api_key},
+                timeout=10,
+            )
+            resp.raise_for_status()
+            return category, len(resp.json().get("results", []))
+        except Exception:
+            return category, 0
+
+    with ThreadPoolExecutor(max_workers=len(all_tasks)) as executor:
+        futures = {executor.submit(_fetch2, cat, ptype): (cat, ptype) for cat, ptype in all_tasks}
+        for future in as_completed(futures):
+            cat, n = future.result()
+            counts[cat] += n
+
+    scores = {cat: min(10.0, round(n / 2.0, 1)) for cat, n in counts.items()}
     return scores if scores else None
 
 
@@ -657,7 +679,7 @@ def _build_neighborhood_from_geo(geo):
     # Fallback: generate deterministic historical values
     if not historical_values:
         from utils.database import generate_historical_values
-        historical_values = json.dumps(generate_historical_values(base_price))
+        historical_values = generate_historical_values(base_price)
 
     # Rent estimate from state baseline
     rent_estimate = STATE_MEDIAN_RENT.get(state, 1500)
