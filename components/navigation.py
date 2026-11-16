@@ -3,6 +3,13 @@ import streamlit as st
 
 def create_navigation():
     """Create consistent navigation sidebar."""
+    # QA fix Nov 15 2026: hide Streamlit default nav.
+    # App has its own custom sidebar nav below,
+    # so the built-in list duplicated it. Runs on
+    # every page via create_navigation().
+    # QA fix Nov 15 2026: bottom padding so the
+    # footer / last content is not cut off.
+    st.markdown("<style>[data-testid=stSidebarNav],[data-testid=stSidebarNavItems],[data-testid=stSidebarNavSeparator]{display:none!important}.block-container{padding-bottom:6rem!important}</style>", unsafe_allow_html=True)
     with st.sidebar:
         st.title("Navigation")
 
